@@ -108,6 +108,14 @@ npm run vault:crack
 
 ---
 
+## 📚 Documentación Técnica Detallada
+
+- 💼 **[Casos de Estudio Operativos Reales](docs/case_studies.md)**: 4 escenarios financieros detallados (pago dividido multi-transacción, fraude por duplicado, descuadre aritmético en escaneo degradado, y error de dígito de NIT DIAN).
+- 🔬 **[Análisis de Capacidades y Límites de SmolVLM2](docs/model_capabilities_and_limits.md)**: Arquitectura SigLIP + SmolLM2, análisis de modos de falla en modelos 1-4B y mitigaciones de ingeniería de Tally.
+- 🏗️ **[Arquitectura del Sistema](docs/architecture.md)**: Diagramas de flujo Mermaid, contratos Zod, capas de resiliencia y filosofía de diseño *Hybrid AI Agent*.
+
+---
+
 ## 👥 División de Trabajo
 
 - **A (Inferencia & Modelos)**: `src/qvac/`, `src/extract/`, `bench/`. Docker, modelo SmolVLM2, prompts VLM, reintentos.

@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
-import { InvoiceSchema, type ExtractFn, type ExtractResult, type Invoice } from "../types.js";
+import { InvoiceSchema, type ExtractFn, type ExtractResult } from "../types.js";
 import { runQvacMultimodal } from "../qvac/client.js";
+import { prepareInvoiceForExtraction } from "../ingest/pdf.js";
 
 const EXTRACTION_PROMPT = `Eres un extractor de facturas comerciales. Analiza la imagen de la factura y extrae la información en un objeto JSON con esta estructura exacta:
 {
@@ -73,11 +74,12 @@ export const qvacExtract: ExtractFn = async (imagePath: string): Promise<Extract
   let lastRaw = "";
 
   const MAX_ATTEMPTS = 2;
+  const optimizedImagePath = await prepareInvoiceForExtraction(imagePath);
 
   while (attempts < MAX_ATTEMPTS) {
     attempts++;
     try {
-      lastRaw = await runQvacMultimodal(imagePath, EXTRACTION_PROMPT);
+      lastRaw = await runQvacMultimodal(optimizedImagePath, EXTRACTION_PROMPT);
       const cleaned = cleanJsonOutput(lastRaw);
       const validation = InvoiceSchema.safeParse(cleaned);
 

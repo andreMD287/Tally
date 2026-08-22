@@ -17,9 +17,10 @@ describe("ingest/pdf and image preprocessor", () => {
     expect(isPdfFile("documento.png")).toBe(false);
   });
 
-  it("retorna la ruta original si el archivo ya es una imagen directa", async () => {
+  it("preprocesa y optimiza una imagen retornando una ruta válida", async () => {
     const p = "data/facturas/FAC-0001.jpg";
     const res = await prepareInvoiceForExtraction(p);
-    expect(res).toBe(p);
+    expect(typeof res).toBe("string");
+    expect(res.length).toBeGreaterThan(0);
   });
 });

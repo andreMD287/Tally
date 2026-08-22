@@ -1,20 +1,23 @@
 import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { extract, setExtractor, mockExtract, qvacExtract } from "./src/extract/index.js";
-import { validate } from "./src/validate/index.js";
+import { validate, setJurisdiction, getActiveJurisdiction } from "./src/validate/index.js";
+import { healInvoice } from "./src/validate/heal.js";
 import { matchInvoices } from "./src/match/index.js";
 import { parseExtractoCsv } from "./src/ingest/extracto.js";
 import { dedupeByInvoiceNumber } from "./src/ingest/dedupe.js";
 import { buildLibroComprasCsv, buildDiscrepanciasMd, type Reconciled } from "./src/report/index.js";
+import { generateCryptoCertificate } from "./src/report/crypto-certificate.js";
 import type { Invoice } from "./src/types.js";
 
 interface Extraida {
   file: string;
   invoice: Invoice;
+  repairs?: string[];
 }
 
 async function loadFromImages(facturasDir: string): Promise<Extraida[]> {
-  const files = (await readdir(facturasDir)).filter((f) => /\.(png|jpe?g)$/i.test(f));
+  const files = (await readdir(facturasDir)).filter((f) => /\.(png|jpe?g|webp)$/i.test(f));
   const out: Extraida[] = [];
   console.log(`\n🔍 Extrayendo datos de ${files.length} imágenes en ${facturasDir}...`);
 
@@ -28,8 +31,13 @@ async function loadFromImages(facturasDir: string): Promise<Extraida[]> {
       console.log(`❌ FALLÓ tras ${result.attempts} intento(s): ${result.error ?? "desconocido"}`);
       continue;
     }
-    console.log(`✅ OK [${result.latencyMs}ms] (${result.invoice.proveedor.slice(0, 20)} - $${result.invoice.total.toLocaleString("es-CO")})`);
-    out.push({ file: f, invoice: result.invoice });
+
+    // Auto-corrección aritmética y resiliencia
+    const healRes = healInvoice(result.invoice);
+    const healMsg = healRes.healed ? ` 🩹 [Auto-Reparado: ${healRes.repairs.length}]` : "";
+
+    console.log(`✅ OK [${result.latencyMs}ms] (${healRes.invoice.proveedor.slice(0, 20)} - $${healRes.invoice.total.toLocaleString("es-CO")})${healMsg}`);
+    out.push({ file: f, invoice: healRes.invoice, repairs: healRes.repairs });
   }
   return out;
 }
@@ -38,7 +46,10 @@ async function loadFromImages(facturasDir: string): Promise<Extraida[]> {
 async function loadFromGroundTruth(gtPath: string): Promise<Extraida[]> {
   console.log(`\n📖 Cargando ground truth desde ${gtPath}...`);
   const raw = JSON.parse(await readFile(gtPath, "utf-8")) as { file: string; invoice: Invoice }[];
-  return raw.map((e) => ({ file: e.file, invoice: e.invoice }));
+  return raw.map((e) => {
+    const healRes = healInvoice(e.invoice);
+    return { file: e.file, invoice: healRes.invoice, repairs: healRes.repairs };
+  });
 }
 
 async function main() {
@@ -52,6 +63,7 @@ Opciones:
   --ground-truth <archivo.json>   Usa el dataset de ground truth en vez de invocar el modelo VLM
   --qvac                          Usa QVAC con SmolVLM2 localmente para extraer las facturas
   --mock                          Usa el extractor mock (por defecto si no se especifica --qvac)
+  --country <CO|AR|MX|GLOBAL>     Define la jurisdicción tributaria (por defecto CO / Colombia DIAN)
     `);
     process.exit(1);
   }
@@ -60,6 +72,11 @@ Opciones:
   const useMock = rest.includes("--mock");
   const gtFlagIdx = rest.indexOf("--ground-truth");
   const groundTruthPath = gtFlagIdx !== -1 ? rest[gtFlagIdx + 1] : null;
+
+  const countryFlagIdx = rest.indexOf("--country");
+  if (countryFlagIdx !== -1 && rest[countryFlagIdx + 1]) {
+    setJurisdiction(rest[countryFlagIdx + 1]);
+  }
 
   if (useQvac) {
     setExtractor(qvacExtract);
@@ -71,6 +88,7 @@ Opciones:
 
   console.log("==================================================================");
   console.log("  TALLY: Pipeline de Conciliación de Facturas y Extracto Bancario");
+  console.log(`  Jurisdicción Activa: ${getActiveJurisdiction().countryName}`);
   console.log("==================================================================");
 
   const extraidasConDuplicados = groundTruthPath
@@ -110,7 +128,7 @@ Opciones:
     match: { invoice: e.invoice, match: null, matchType: "sin_match", score: 0 },
   }));
 
-  // Paso 5: Generación de Reportes
+  // Paso 5: Generación de Reportes y Certificado Criptográfico
   const outDir = path.resolve("out");
   await mkdir(outDir, { recursive: true });
   const libroComprasPath = path.join(outDir, "libro_compras.csv");
@@ -118,6 +136,13 @@ Opciones:
 
   await writeFile(libroComprasPath, buildLibroComprasCsv(reconciled));
   await writeFile(discrepanciasPath, buildDiscrepanciasMd(reconciled, duplicadasReconciled));
+
+  // Generación de Sello Criptográfico SHA-256
+  const cert = await generateCryptoCertificate(
+    reconciled.map((r) => r.invoice),
+    matches,
+    outDir
+  );
 
   // Resumen Estadístico
   const ok = reconciled.filter((r) => r.validation.ok).length;
@@ -136,9 +161,11 @@ Opciones:
   console.log(`   - Coincidencias aproximadas: ${aprox}`);
   console.log(`   - Pagos divididos (2 tx):    ${divididos}`);
   console.log(`   - Sin coincidencia bancaria: ${sinMatch}`);
+  console.log(`\n🛡️ Sello Criptográfico:  ${cert.certificateId} (SHA-256: ${cert.integrity.batchDigestSha256.slice(0, 16)}...)`);
   console.log(`\n📁 Reportes generados:`);
-  console.log(`   1. Libro de Compras: ${libroComprasPath}`);
-  console.log(`   2. Discrepancias:    ${discrepanciasPath}`);
+  console.log(`   1. Libro de Compras:       ${libroComprasPath}`);
+  console.log(`   2. Discrepancias:          ${discrepanciasPath}`);
+  console.log(`   3. Certificado Cripto:     ${path.join(outDir, "certificado_auditoria.json")}`);
   console.log("==================================================================\n");
 }
 

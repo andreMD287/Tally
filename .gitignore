@@ -1,11 +1,12 @@
 node_modules/
 dist/
-out/*.csv
-out/*.md
-out/*.json
+out/
 data/facturas/
 data/ground_truth.json
 data/extracto.csv
+mis_fotos_facturas/*.jpg
+mis_fotos_facturas/*.jpeg
+mis_fotos_facturas/*.png
 *.log
 .env
 models/

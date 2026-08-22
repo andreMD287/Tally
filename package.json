@@ -12,6 +12,7 @@
     "bench:stability": "tsx bench/stability.ts",
     "vault:crack": "tsx tools/vault-guardian/cracker.ts",
     "client:demo": "tsx scripts/client-scenario.ts",
+    "ui": "tsx src/ui/server.ts",
     "demo": "tsx demo.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

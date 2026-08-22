@@ -1,0 +1,9 @@
+# Carpeta de Fotos Reales de Facturas (Sin Sesgo / Zero Bias)
+
+Coloca aquí las fotos tomadas con tu celular o cámara (en formato .jpg, .jpeg o .png).
+
+El modelo VLM de QVAC (SmolVLM2-500M) leerá las imágenes en crudo directamente desde cero,
+sin plantillas previas ni ground truth estático.
+
+Comando para procesar esta carpeta:
+npm run cli -- ./mis_fotos_facturas ./imprimibles_para_pruebas/extracto_bancario_pruebas.csv --qvac

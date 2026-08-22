@@ -1,0 +1,29 @@
+{
+  "invoice-01.png": {
+    "supplier": "Distribuciones Andina S.A.S.",
+    "tax_id": "901.234.567-8",
+    "invoice_number": "FAC-2026-0815",
+    "date": "2026-08-15",
+    "subtotal": 1234567,
+    "tax": 234568,
+    "total": 1469135
+  },
+  "invoice-02.png": {
+    "supplier": "Café Sierra Nevada S.A.S.",
+    "tax_id": "800.456.789-1",
+    "invoice_number": "FV-004287",
+    "date": "2026-08-18",
+    "subtotal": 875000,
+    "tax": 0,
+    "total": 875000
+  },
+  "invoice-03-degraded.png": {
+    "supplier": "Ferretería El Puente Ltda.",
+    "tax_id": "830.112.445-6",
+    "invoice_number": "FE-98231",
+    "date": "2026-08-20",
+    "subtotal": 2450000,
+    "tax": 465500,
+    "total": 2915500
+  }
+}

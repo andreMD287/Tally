@@ -1,0 +1,13 @@
+services:
+  tally:
+    build: .
+    container_name: tally-agent
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./out:/app/out
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: unless-stopped

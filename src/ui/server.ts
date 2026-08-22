@@ -148,6 +148,9 @@ async function getDashboardHtml(): Promise<string> {
           <a href="/api/download/md" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white shadow-lg shadow-indigo-600/20 transition flex items-center gap-1.5">
             📋 Discrepancias
           </a>
+          <a href="/api/download/cert" class="px-3.5 py-2 rounded-xl bg-amber-600/20 border border-amber-500/30 hover:bg-amber-600/30 text-xs font-medium text-amber-300 transition flex items-center gap-1.5">
+            🛡️ Certificado SHA-256
+          </a>
         </div>
       </div>
       <div class="overflow-x-auto max-h-[500px]">
@@ -211,6 +214,19 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, {
         "Content-Type": "text/markdown",
         "Content-Disposition": 'attachment; filename="discrepancias.md"',
+      });
+      res.end(data);
+      return;
+    }
+  }
+
+  if (url === "/api/download/cert") {
+    const filePath = path.resolve("out", "certificado_auditoria.json");
+    if (existsSync(filePath)) {
+      const data = await readFile(filePath);
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Content-Disposition": 'attachment; filename="certificado_auditoria.json"',
       });
       res.end(data);
       return;

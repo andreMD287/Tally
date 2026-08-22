@@ -25,32 +25,37 @@ npm test               # corre la suite de validate/ y match/
 `data/` esta en `.gitignore` porque el generador es deterministico: cualquiera que corra
 `npm run gen:dataset` obtiene exactamente el mismo dataset.
 
-## CLI
+## CLI y Comandos
 
 ```bash
-# modo real: lee imagenes de data/facturas y usa extract() (hoy: mock, luego: QVAC)
-npm run cli -- ./data/facturas ./data/extracto.csv
-
-# modo prueba: usa el ground truth como si fuera la salida perfecta del modelo,
-# para validar la logica del pipeline (validate + match + report) sin depender del modelo
+# 1. Modo Ground-Truth: prueba el pipeline completo contra la verdad de campo
 npm run cli -- ./data/facturas ./data/extracto.csv --ground-truth ./data/ground_truth.json
+
+# 2. Modo Real con QVAC (SmolVLM2-500M multimodal local):
+npm run cli -- ./data/facturas ./data/extracto.csv --qvac
+
+# 3. Suite de Evaluación y Benchmarks (mide exactitud por campo, latencias y degradadas):
+npm run bench
+
+# 4. Demo interactiva del Hackathon:
+npm run demo
 ```
 
-Salida en `out/libro_compras.csv` y `out/discrepancias.md`.
+Salida en `out/libro_compras.csv`, `out/discrepancias.md` y `out/benchmark_results.md`.
 
 ## Estado
 
 - [x] Contrato (`src/types.ts`) + mock de `extract()`
-- [x] Generador de dataset (40 facturas, 5 disenos, IVA 19/5/0%, ~30% degradadas, ~70% conciliables)
-- [x] `validate()`: aritmetica (+-$2), tarifa de IVA, digito de verificacion de NIT, fecha
-- [x] Matching factura <-> extracto (monto exacto + fecha +-3 dias, desempate por nombre, pago dividido en 2 transacciones)
-- [x] Deteccion de facturas duplicadas (mismo numero+total reenviado)
+- [x] Generador de dataset (40 facturas, 5 diseños, IVA 19/5/0%, ~30% degradadas, ~70% conciliables)
+- [x] `validate()`: aritmética (+-$2), tarifa de IVA, dígito de verificación de NIT, fecha
+- [x] Matching factura <-> extracto (monto exacto + fecha +-3 días, desempate por nombre, pago dividido en 2 transacciones)
+- [x] Detección de facturas duplicadas (mismo número+total reenviado)
 - [x] Reportes (`libro_compras.csv`, `discrepancias.md`)
-- [x] CLI end-to-end (probado con el mock y con ground truth)
-- [ ] Extraccion real con QVAC (A)
-- [ ] Integracion final sin mock
-- [ ] Benchmark y metricas
-- [ ] Demo
+- [x] CLI end-to-end (probado con el mock, ground truth y QVAC)
+- [x] Extracción real con QVAC (Track A: `@qvac/sdk` con `SMOLVLM2_500M_MULTIMODAL_Q8_0`)
+- [x] Integración modular (soporte dinámico de extractores QVAC / Mock)
+- [x] Benchmark cuantitativo y métricas (`bench/evaluate.ts`)
+- [x] Demo interactiva para presentación (`demo.ts`)
 
 ## Nota para A: modelo a usar
 

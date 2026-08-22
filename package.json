@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "gen:dataset": "tsx scripts/generate-dataset.ts",
+    "gen:docx": "tsx scripts/generate-printable-docx.ts",
     "cli": "tsx cli.ts",
     "audit": "tsx src/report/audit.ts",
     "bench": "tsx bench/evaluate.ts",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "docx": "^9.7.1",
     "sharp": "^0.33.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",

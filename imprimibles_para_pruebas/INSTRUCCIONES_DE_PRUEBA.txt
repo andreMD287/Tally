@@ -1,0 +1,23 @@
+========================================================================
+ GUÍA DE PRUEBA REAL (IMPRESIÓN -> FOTO CON CELULAR -> CONCILIACIÓN)
+========================================================================
+
+Archivos generados en esta carpeta:
+1. 01_Factura_Electronica_FE-1084.docx  -> Factura comercial estándar ($1.785.000).
+2. 02_Tiquete_Restaurante_POS-5420.docx -> Tiquete de caja tipo tirilla térmica ($145.000).
+3. 03_Cuenta_de_Cobro_CC-2026-08.docx  -> Honorarios ($3.200.000) pagados en 2 cuotas en banco ($2M + $1.2M).
+4. 04_Factura_Error_Aritmetico_FAC-3391.docx -> Factura con descuadre matemático intencional.
+5. 05_Factura_NIT_Invalido_FV-8820.docx -> Factura con dígito de verificación DIAN errado.
+6. extracto_bancario_pruebas.csv       -> Extracto del banco con los movimientos del mes.
+
+CÓMO HACER LA PRUEBA EN TU ENTORNO:
+-----------------------------------
+1. Abre e imprime (o abre a pantalla completa en otra pantalla) los archivos .docx.
+2. Tómales fotos con tu celular (puedes tomarlas con algo de ángulo, sombra o arrugas).
+3. Guarda las fotos en una carpeta llamada 'mis_fotos_facturas' (en formato .jpg o .png).
+4. Corre Tally apuntando a tus fotos y al extracto de prueba:
+   
+   npm run cli -- ./mis_fotos_facturas ./imprimibles_para_pruebas/extracto_bancario_pruebas.csv --qvac
+
+5. Abre los reportes generados en 'out/libro_compras.csv' y 'out/discrepancias.md'.
+========================================================================

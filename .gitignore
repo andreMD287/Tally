@@ -1,0 +1,12 @@
+node_modules/
+dist/
+out/*.csv
+out/*.md
+out/*.json
+data/facturas/
+data/ground_truth.json
+data/extracto.csv
+*.log
+.env
+models/
+*.gguf

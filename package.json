@@ -1,0 +1,22 @@
+{
+  "name": "tally",
+  "version": "0.1.0",
+  "description": "Conciliacion local de facturas con QVAC (Aleph Hackathon)",
+  "type": "module",
+  "scripts": {
+    "gen:dataset": "tsx scripts/generate-dataset.ts",
+    "cli": "tsx cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "sharp": "^0.33.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

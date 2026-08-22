@@ -1,8 +1,7 @@
 import type { Invoice } from "../types.js";
-import { isValidNit } from "../nit.js";
+import { getActiveJurisdiction } from "./jurisdictions/index.js";
 
-const IVA_RATES = [0, 0.05, 0.19];
-const ARITH_TOLERANCE = 2; // pesos
+const ARITH_TOLERANCE = 2; // margen por redondeo
 const IVA_RATE_TOLERANCE = 0.005;
 
 /** subtotal + iva debe cuadrar con total, +-$2 de margen por redondeo. */
@@ -15,23 +14,29 @@ export function checkArithmetic(inv: Invoice): string | null {
   return null;
 }
 
-/** La tarifa de IVA implicita debe ser 0%, 5% o 19% (+-0.5%). */
+/** La tarifa de IVA implicita debe coincidir con las tarifas válidas de la jurisdicción activa. */
 export function checkIvaRate(inv: Invoice): string | null {
   if (inv.subtotal <= 0) {
     return inv.iva !== 0 ? `IVA distinto de cero con subtotal <= 0` : null;
   }
+  const jurisdiction = getActiveJurisdiction();
+  const rates = jurisdiction.validIvaRates;
   const rate = inv.iva / inv.subtotal;
-  const closest = IVA_RATES.reduce((best, r) => (Math.abs(r - rate) < Math.abs(best - rate) ? r : best));
+  const closest = rates.reduce((best, r) => (Math.abs(r - rate) < Math.abs(best - rate) ? r : best));
   if (Math.abs(rate - closest) > IVA_RATE_TOLERANCE) {
     return `Tarifa de IVA no reconocida: ${(rate * 100).toFixed(2)}% (mas cercana valida: ${closest * 100}%)`;
   }
   return null;
 }
 
-/** NIT presente y con digito de verificacion correcto. */
+/** Identificación tributaria (NIT / CUIT / RFC / Tax ID) presente y válida según la jurisdicción activa. */
 export function checkNit(inv: Invoice): string | null {
-  if (!inv.nit) return "NIT faltante";
-  if (!isValidNit(inv.nit)) return `Digito de verificacion de NIT invalido: ${inv.nit}`;
+  const jurisdiction = getActiveJurisdiction();
+  if (!inv.nit) return `${jurisdiction.taxIdName} faltante`;
+  const result = jurisdiction.validateTaxId(inv.nit);
+  if (!result.isValid) {
+    return result.error ?? `Digito de verificacion de ${jurisdiction.taxIdName} invalido: ${inv.nit}`;
+  }
   return null;
 }
 

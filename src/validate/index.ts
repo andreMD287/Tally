@@ -7,3 +7,5 @@ export const validate: ValidateFn = (inv: Invoice): ValidationResult => {
 };
 
 export * from "./rules.js";
+export * from "./jurisdictions/index.js";
+export * from "./confidence.js";

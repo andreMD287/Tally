@@ -1,80 +1,115 @@
-# Tally
+# 📊 Tally — Agente Local Autónomo para Conciliación de Facturas y Extractos
 
-Conciliacion local de facturas con QVAC (Aleph Hackathon, Track "Local agents para operaciones").
+> **Aleph Hackathon 2026** — *Track: Local agents para operaciones (Tether / QVAC Track)*  
+> **Premios objetivo**: 🥇 Track 1 (1st place) · 🥈 Track 2 (Tool use & reliability) · 🛡️ The Vault Guardian ($500 USDt pool)
 
-Lee facturas (imagenes), extrae los datos con un VLM corriendo 100% local via `@qvac/sdk`,
-valida reglas de negocio, concilia contra un extracto bancario y genera un libro de compras
-+ un reporte de discrepancias auditable por un humano en 5 segundos.
+**Tally** es un agente financiero autónomo que procesa facturas comerciales (imágenes/escaneos con ruido, rotación o baja calidad), extrae datos estructurados con un modelo VLM multimodal corriendo **100% en local mediante `@qvac/sdk`**, aplica reglas de validación tributaria (DIAN), concilia los montos contra extractos bancarios en segundos y genera reportes auditables con niveles de confianza y acciones recomendadas en 5 segundos.
 
-## Division de trabajo
+---
 
-- **A (inferencia)**: `src/qvac/`, `src/extract/`, `bench/`. Docker, modelo, prompts del VLM, reintentos, benchmark.
-- **B (pipeline y datos)**: `scripts/`, `src/ingest/`, `src/validate/`, `src/match/`, `src/report/`, `cli.ts`, `data/`.
-- **Compartido**: `src/types.ts`. Se toca de a dos, nunca solo.
+## 🔗 Permalinks de Integración con QVAC (Para los Jueces)
 
-La costura es el objeto `Invoice` (ver `src/types.ts`). Nadie toca el codigo del otro lado; si algo esta roto, se avisa.
+Direct links to the source code files where local inference and model orchestration happen:
 
-## Setup
+- **Inicialización del Modelo y Ciclo de Vida QVAC**: [`src/qvac/client.ts`](src/qvac/client.ts)
+  - Carga del modelo multimodal: `loadModel({ modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0, modelConfig: { projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0 } })`
+  - Inferencia multimodal streaming/final: `completion({ modelId, history: [{ role: "user", content: prompt, attachments: [{ path }] }] })`
+  - Descarga de recursos en memoria: `unloadModel({ modelId })`
+- **Prompt Engineering y Extracción Estructurada con Zod**: [`src/extract/qvac.ts`](src/extract/qvac.ts)
+  - Sanitización de salidas markdown/JSON, corrección de formato monetario y reintentos automáticos.
+- **Cuantificación de Confianza e Incertidumbre**: [`src/validate/confidence.ts`](src/validate/confidence.ts)
+  - Cálculo de confianza objetiva (0-100%) para evitar alucinaciones.
+- **Suite de Jailbreaks para The Vault Guardian**: [`tools/vault-guardian/cracker.ts`](tools/vault-guardian/cracker.ts)
+
+---
+
+## 💻 Especificaciones de Modelo y Hardware
+
+| Parámetro | Especificación |
+|---|---|
+| **Modelo Principal** | `SmolVLM2-500M-Instruct` (`SMOLVLM2_500M_MULTIMODAL_Q8_0`) |
+| **Proyección Multimodal** | `MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0` |
+| **Cuantización** | `Q8_0` (alta fidelidad en números y caracteres pequeños) |
+| **Consumo de RAM** | **~500 MB** (muy por debajo del límite de 4GB de laptops estándar) |
+| **Privacidad** | **100% Local / Offline**. Cero datos financieros enviados a APIs externas o nube. |
+| **Runtime** | Bare runtime / Node.js con `@qvac/sdk` |
+
+---
+
+## 🚀 Setup Rápido (Desde un clon limpio)
 
 ```bash
+# 1. Clonar e instalar dependencias
+git clone https://github.com/andreMD287/Tally.git
+cd Tally
 npm install
-npm run gen:dataset   # genera 40 facturas sinteticas en data/ (deterministico, seed fija)
-npm test               # corre la suite de validate/ y match/
+
+# 2. Generar el dataset determinístico de 40 facturas con casos de prueba
+npm run gen:dataset
+
+# 3. Ejecutar la suite de tests unitarios (40+ tests)
+npm test
 ```
 
-`data/` esta en `.gitignore` porque el generador es deterministico: cualquiera que corra
-`npm run gen:dataset` obtiene exactamente el mismo dataset.
+---
 
-## CLI y Comandos
+## 🛠️ Comandos y Modos de Ejecución
 
+### 1. Demostración Completa del Hackathon
+Muestra el flujo end-to-end de extracción, deduplicación, validación DIAN, pagos divididos y reportes:
 ```bash
-# 1. Modo Ground-Truth: prueba el pipeline completo contra la verdad de campo
-npm run cli -- ./data/facturas ./data/extracto.csv --ground-truth ./data/ground_truth.json
-
-# 2. Modo Real con QVAC (SmolVLM2-500M multimodal local):
-npm run cli -- ./data/facturas ./data/extracto.csv --qvac
-
-# 3. Suite de Evaluación y Benchmarks (mide exactitud por campo, latencias y degradadas):
-npm run bench
-
-# 4. Demo interactiva del Hackathon:
 npm run demo
 ```
 
-Salida en `out/libro_compras.csv`, `out/discrepancias.md` y `out/benchmark_results.md`.
+### 2. CLI en Modo Real con QVAC (SmolVLM2 local)
+```bash
+npm run cli -- ./data/facturas ./data/extracto.csv --qvac
+```
 
-## Estado
+### 3. CLI en Modo Prueba (Ground Truth)
+Valida la lógica del pipeline contra la verdad de campo:
+```bash
+npm run cli -- ./data/facturas ./data/extracto.csv --ground-truth ./data/ground_truth.json
+```
 
-- [x] Contrato (`src/types.ts`) + mock de `extract()`
-- [x] Generador de dataset (40 facturas, 5 diseños, IVA 19/5/0%, ~30% degradadas, ~70% conciliables)
-- [x] `validate()`: aritmética (+-$2), tarifa de IVA, dígito de verificación de NIT, fecha
-- [x] Matching factura <-> extracto (monto exacto + fecha +-3 días, desempate por nombre, pago dividido en 2 transacciones)
-- [x] Detección de facturas duplicadas (mismo número+total reenviado)
-- [x] Reportes (`libro_compras.csv`, `discrepancias.md`)
-- [x] CLI end-to-end (probado con el mock, ground truth y QVAC)
-- [x] Extracción real con QVAC (Track A: `@qvac/sdk` con `SMOLVLM2_500M_MULTIMODAL_Q8_0`)
-- [x] Integración modular (soporte dinámico de extractores QVAC / Mock)
-- [x] Benchmark cuantitativo y métricas (`bench/evaluate.ts`)
-- [x] Demo interactiva para presentación (`demo.ts`)
+### 4. Auditoría Humana Interactiva en 5 Segundos (Human-in-the-Loop)
+Permite al operador resolver en terminal las facturas observadas (`[A]probar`, `[R]echazar`, `[O]bservar`):
+```bash
+npm run audit
+```
 
-## Nota para A: modelo a usar
+### 5. Suite de Benchmarks y Evaluación Cuantitativa
+Calcula métricas de precisión campo por campo, imágenes limpias vs 30% degradadas, y latencias:
+```bash
+npm run bench
+```
 
-**VisionPsy NO esta soportado por el SDK de QVAC todavia**, aunque existe en Hugging Face
-(la pagina del hackathon lo dice explicitamente: *"Vision in QVAC is good, but not via
-VisionPsy for now"*). No perder tiempo intentando cargarlo por el loader estandar.
+### 6. Matriz de Estabilidad Multi-Run (Track 2)
+Ejecuta $N=5$ corridas consecutivas para demostrar determinismo y resiliencia:
+```bash
+npm run bench:stability
+```
 
-Lo que si esta documentado y listo para usar en el SDK JS/TS hoy:
+### 7. Suite para The Vault Guardian Challenge ($500 USDt)
+Ejecuta la batería de vectores de prompt injection contra la IA defensora:
+```bash
+npm run vault:crack
+```
 
-| Para que | Modelo | Como se carga |
-|---|---|---|
-| VLM multimodal (imagen -> texto/JSON) | **SmolVLM2** + mmproj | constante `SMOLVLM2_500M_MULTIMODAL_Q8_0` (500M, Q8_0) |
-| Alternativa mas grande/pesada | Qwen2.5-Omni o Qwen3-VL + mmproj | mismo patron, mas RAM |
-| OCR puro (deteccion+reconocimiento) | pipeline ONNX (CRAFT) | constante `OCR_LATIN`, requiere `detector_craft.onnx` + `recognizer_<lang>.onnx` |
+---
 
-Recomendacion: arrancar con `SMOLVLM2_500M_MULTIMODAL_Q8_0` como VLM principal (imagen +
-prompt pidiendo el JSON con la forma de `InvoiceSchema` en `src/types.ts`). Es liviano
-(500M, muy por debajo del techo de 4GB de RAM) y no depende de configuracion manual.
-`OCR_LATIN` queda como refuerzo opcional para casos degradados, no hace falta para el MVP.
+## 📁 Archivos de Salida Generados
 
-El benchmark de A (Bloque 5) deberia comparar SmolVLM2-Q8_0 vs Qwen (si el hardware
-aguanta), no las variantes de VisionPsy como decia el plan original.
+- `out/libro_compras.csv`: Libro contable listo para exportación tributaria con referencias bancarias y nivel de confianza.
+- `out/discrepancias.md`: Reporte categorizado por severidad (🔴 Crítico, 🟡 Advertencia, 🔵 Informativo) con acciones en 5 segundos.
+- `out/benchmark_results.md`: Métricas cuantitativas de precisión y latencia.
+- `out/stability_matrix.md`: Matriz de consistencia multi-run para Track 2.
+- `out/auditoria_resoluciones.json`: Log auditable de resoluciones tomadas por el operador humano.
+
+---
+
+## 👥 División de Trabajo
+
+- **A (Inferencia & Modelos)**: `src/qvac/`, `src/extract/`, `bench/`. Docker, modelo SmolVLM2, prompts VLM, reintentos.
+- **B (Pipeline, Datos & Auditoría)**: `scripts/`, `src/ingest/`, `src/validate/`, `src/match/`, `src/report/`, `cli.ts`, `data/`.
+- **Compartido**: `src/types.ts`.

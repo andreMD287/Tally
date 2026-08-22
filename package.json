@@ -6,7 +6,10 @@
   "scripts": {
     "gen:dataset": "tsx scripts/generate-dataset.ts",
     "cli": "tsx cli.ts",
+    "audit": "tsx src/report/audit.ts",
     "bench": "tsx bench/evaluate.ts",
+    "bench:stability": "tsx bench/stability.ts",
+    "vault:crack": "tsx tools/vault-guardian/cracker.ts",
     "demo": "tsx demo.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

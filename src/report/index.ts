@@ -1,10 +1,12 @@
 import type { Invoice, MatchResult, ValidationResult } from "../types.js";
+import { calculateConfidence, type ConfidenceBreakdown } from "../validate/confidence.js";
 
 export interface Reconciled {
   sourceFile: string;
   invoice: Invoice;
   validation: ValidationResult;
   match: MatchResult;
+  confidence?: ConfidenceBreakdown;
 }
 
 function csvEscape(v: string | number): string {
@@ -22,6 +24,8 @@ const LIBRO_HEADERS = [
   "iva",
   "total",
   "validacion",
+  "confianza",
+  "nivelConfianza",
   "errores",
   "conciliacion",
   "referenciaPago",
@@ -29,6 +33,7 @@ const LIBRO_HEADERS = [
 
 export function buildLibroComprasCsv(rows: Reconciled[]): string {
   const lines = rows.map((r) => {
+    const conf = r.confidence ?? calculateConfidence(r.invoice, r.validation, r.match);
     const cols = [
       r.sourceFile,
       r.invoice.numeroFactura ?? "",
@@ -39,6 +44,8 @@ export function buildLibroComprasCsv(rows: Reconciled[]): string {
       r.invoice.iva,
       r.invoice.total,
       r.validation.ok ? "OK" : "ERROR",
+      `${conf.percentage}%`,
+      conf.level,
       r.validation.errors.join(" | "),
       r.match.matchType,
       r.match.match?.referencia ?? r.match.splitMatches?.map((l) => l.referencia).join(" + ") ?? "",
@@ -49,7 +56,21 @@ export function buildLibroComprasCsv(rows: Reconciled[]): string {
 }
 
 function resumenFactura(r: Reconciled): string {
-  return `**${r.invoice.numeroFactura ?? "(sin numero)"}** — ${r.invoice.proveedor} — ${r.invoice.fecha} — $${r.invoice.total.toLocaleString("es-CO")}`;
+  const conf = r.confidence ?? calculateConfidence(r.invoice, r.validation, r.match);
+  return `**${r.invoice.numeroFactura ?? "(sin número)"}** — ${r.invoice.proveedor} — ${r.invoice.fecha} — $${r.invoice.total.toLocaleString("es-CO")} [Confianza: ${conf.percentage}% - ${conf.level.toUpperCase()}]`;
+}
+
+function accionRecomendada(r: Reconciled, tipo: "error_aritm" | "nit_invalido" | "sin_pago" | "duplicado"): string {
+  switch (tipo) {
+    case "error_aritm":
+      return `⚡ **Acción en 5s**: Solicitar refacturación al proveedor o revisar si hubo un descuento comercial no desglosado.`;
+    case "nit_invalido":
+      return `⚡ **Acción en 5s**: Verificar RUT del proveedor en el portal DIAN para confirmar dígito de verificación.`;
+    case "sin_pago":
+      return `⚡ **Acción en 5s**: Confirmar con tesorería si el pago está programado para próximo corte o si se pagó desde otra cuenta bancaria.`;
+    case "duplicado":
+      return `⚡ **Acción en 5s**: Descartar registro duplicado para evitar doble contabilización o doble pago.`;
+  }
 }
 
 export function buildDiscrepanciasMd(rows: Reconciled[], duplicadas: Reconciled[] = []): string {
@@ -57,54 +78,67 @@ export function buildDiscrepanciasMd(rows: Reconciled[], duplicadas: Reconciled[
   const sinProblema = rows.length - conProblema.length;
 
   const secciones: string[] = [];
-  secciones.push(`# Discrepancias\n`);
+  secciones.push(`# Reporte de Discrepancias y Auditoría Operativa\n`);
   secciones.push(
-    `${rows.length} facturas procesadas. ${sinProblema} sin problemas. ${conProblema.length} requieren revision.` +
-      (duplicadas.length > 0 ? ` ${duplicadas.length} descartadas por duplicadas.` : "") +
+    `> **Resumen Ejecutivo**: ${rows.length} facturas procesadas. **${sinProblema} sin problemas** (conciliación automática lista). **${conProblema.length} requieren revisión humana**.` +
+      (duplicadas.length > 0 ? ` **${duplicadas.length} duplicadas descartadas** automáticamente.` : "") +
       "\n"
   );
 
-  const errores = conProblema.filter((r) => !r.validation.ok);
-  if (errores.length > 0) {
-    secciones.push(`## Errores de validacion (${errores.length})\n`);
-    for (const r of errores) {
+  const erroresAritm = conProblema.filter((r) => r.validation.errors.some((e) => e.toLowerCase().includes("aritmet") || e.toLowerCase().includes("descuadre")));
+  const erroresNit = conProblema.filter((r) => r.validation.errors.some((e) => e.toLowerCase().includes("nit") || e.toLowerCase().includes("digito")));
+
+  if (erroresAritm.length > 0) {
+    secciones.push(`## 🔴 CRÍTICO: Descuadres Aritméticos (${erroresAritm.length})\n`);
+    for (const r of erroresAritm) {
       secciones.push(`- ${resumenFactura(r)}`);
-      for (const err of r.validation.errors) {
-        secciones.push(`  - ${err}`);
+      for (const err of r.validation.errors.filter((e) => e.toLowerCase().includes("aritmet") || e.toLowerCase().includes("descuadre"))) {
+        secciones.push(`  - ⚠️ *${err}*`);
       }
+      secciones.push(`  - ${accionRecomendada(r, "error_aritm")}\n`);
     }
-    secciones.push("");
+  }
+
+  if (erroresNit.length > 0) {
+    secciones.push(`## 🟡 ADVERTENCIA: Inconsistencia en NIT / Régimen (${erroresNit.length})\n`);
+    for (const r of erroresNit) {
+      secciones.push(`- ${resumenFactura(r)}`);
+      for (const err of r.validation.errors.filter((e) => e.toLowerCase().includes("nit") || e.toLowerCase().includes("digito"))) {
+        secciones.push(`  - ⚠️ *${err}*`);
+      }
+      secciones.push(`  - ${accionRecomendada(r, "nit_invalido")}\n`);
+    }
   }
 
   const sinPago = conProblema.filter((r) => r.validation.ok && r.match.matchType === "sin_match");
   if (sinPago.length > 0) {
-    secciones.push(`## Sin pago encontrado en el extracto (${sinPago.length})\n`);
+    secciones.push(`## 🔴 CRÍTICO: Facturas sin Pago en Extracto (${sinPago.length})\n`);
     for (const r of sinPago) {
-      secciones.push(`- ${resumenFactura(r)} — no se encontro un movimiento con ese monto dentro de +-3 dias.`);
+      secciones.push(`- ${resumenFactura(r)} — No se encontró movimiento coincidente dentro de la ventana de ±3 días.`);
+      secciones.push(`  - ${accionRecomendada(r, "sin_pago")}\n`);
     }
-    secciones.push("");
   }
 
   const divididas = rows.filter((r) => r.match.matchType === "dividido");
   if (divididas.length > 0) {
-    secciones.push(`## Conciliadas con pago dividido (${divididas.length})\n`);
+    secciones.push(`## 🔵 INFORMATIVO: Conciliadas con Pago Dividido / Multi-Transacción (${divididas.length})\n`);
     for (const r of divididas) {
       const refs = r.match.splitMatches?.map((l) => `${l.referencia} ($${l.monto.toLocaleString("es-CO")})`).join(" + ") ?? "";
-      secciones.push(`- ${resumenFactura(r)} — cubierta por ${refs}.`);
+      secciones.push(`- ${resumenFactura(r)} — Factura cubierta por suma de 2 transacciones: ${refs}.`);
+      secciones.push(`  - 💡 *Conciliación automática exitosa, no requiere intervención.*\n`);
     }
-    secciones.push("");
   }
 
   if (duplicadas.length > 0) {
-    secciones.push(`## Facturas duplicadas, no contadas dos veces (${duplicadas.length})\n`);
+    secciones.push(`## 🛡️ Detección de Duplicados (${duplicadas.length})\n`);
     for (const r of duplicadas) {
-      secciones.push(`- ${resumenFactura(r)} — reenvio de una factura ya procesada (${r.sourceFile}).`);
+      secciones.push(`- ${resumenFactura(r)} — Reenvío de factura ya registrada previamente (${r.sourceFile}).`);
+      secciones.push(`  - ${accionRecomendada(r, "duplicado")}\n`);
     }
-    secciones.push("");
   }
 
   if (conProblema.length === 0 && divididas.length === 0 && duplicadas.length === 0) {
-    secciones.push("Todo concilia. No hay discrepancias que revisar.\n");
+    secciones.push("✅ **Todo concilia al 100%**. No se encontraron discrepancias operativas.\n");
   }
 
   return secciones.join("\n");

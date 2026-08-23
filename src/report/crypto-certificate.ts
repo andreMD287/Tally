@@ -4,6 +4,21 @@ import path from "node:path";
 import type { Invoice, MatchResult } from "../types.js";
 import { getActiveJurisdiction } from "../validate/jurisdictions/index.js";
 
+export interface EngineInfo {
+  /** Identifica que extractor genero los datos: es la unica fuente de verdad para privacyProof. */
+  source: "qvac" | "mock" | "ground-truth";
+  model: string;
+  quantization: string;
+  hardwareRuntime: string;
+}
+
+export const QVAC_ENGINE_INFO: EngineInfo = {
+  source: "qvac",
+  model: "SmolVLM2-500M-Instruct (SMOLVLM2_500M_MULTIMODAL_Q8_0)",
+  quantization: "Q8_0 (8-bit High Fidelity)",
+  hardwareRuntime: "Bare runtime / Node.js with @qvac/sdk",
+};
+
 export interface AuditCertificate {
   certificateId: string;
   timestamp: string;
@@ -36,7 +51,8 @@ export interface AuditCertificate {
 export async function generateCryptoCertificate(
   invoices: Invoice[],
   matches: MatchResult[],
-  outDir: string = "out"
+  outDir: string = "out",
+  engine: EngineInfo = { source: "mock", model: "none (mock/ground-truth, no model executed)", quantization: "n/a", hardwareRuntime: "n/a" }
 ): Promise<AuditCertificate> {
   // Hash canónico determinístico de todas las facturas procesadas
   const canonicalData = invoices
@@ -59,11 +75,14 @@ export async function generateCryptoCertificate(
     version: "0.1.0",
     jurisdiction: getActiveJurisdiction().countryName,
     privacyProof: {
-      mode: "100% On-Device / Zero-Cloud",
-      model: "SmolVLM2-500M-Instruct (SMOLVLM2_500M_MULTIMODAL_Q8_0)",
-      quantization: "Q8_0 (8-bit High Fidelity)",
+      mode:
+        engine.source === "qvac"
+          ? "100% On-Device / Zero-Cloud (live SmolVLM2 inference via @qvac/sdk)"
+          : `NOT a privacy proof of AI inference: extractor was "${engine.source}" — no vision model executed for this run`,
+      model: engine.model,
+      quantization: engine.quantization,
       networkTransmissions: "0 bytes sent to external cloud or third-party APIs",
-      hardwareRuntime: "Bare runtime / Node.js with @qvac/sdk",
+      hardwareRuntime: engine.hardwareRuntime,
     },
     integrity: {
       totalInvoices: invoices.length,

@@ -48,7 +48,7 @@ Tally is an end-to-end autonomous back-office reconciliation agent:
 - **Inference Runtime**: `@qvac/sdk` loading `SmolVLM2-500M-Instruct` with `Q8_0` quantization on the Bare/Node runtime.
 - **Contract & Guardrails**: TypeScript with `zod` for strict schema parsing and error handling.
 - **Vision Pre-Processing**: `sharp` for EXIF orientation correction, dimension normalization (max 1600px), and contrast enhancement.
-- **Reconciliation Engine**: Deterministic algorithms supporting exact matching, +-3 day date windows, Levenshtein bigram name similarity, and combinatorial split-payment pairing.
+- **Reconciliation Engine**: Deterministic algorithms supporting amount-tolerant matching (+-$2), +-3 day date windows, Sorensen-Dice bigram name similarity, and combinatorial split-payment pairing.
 - **Verification & Testing**: Comprehensive unit test suite with 59 automated tests executed via `vitest` with 0 TypeScript errors.
 - **Local User Interface**: Lightweight local HTTP server serving an SSR Dark Mode dashboard for live audit review.
 

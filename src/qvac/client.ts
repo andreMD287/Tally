@@ -30,6 +30,11 @@ export async function getOrLoadQvacModel(): Promise<string> {
       modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0,
       modelConfig: {
         projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+        // El default del SDK (LLM_CONFIG_DEFAULTS.ctx_size) es 1024. Confirmado en vivo:
+        // una imagen + el prompt de extraccion revienta eso con CONTEXT_OVERFLOW, y por debajo
+        // del limite el modelo devuelve salida sin relacion con la imagen (probablemente
+        // porque los tokens de vision quedan truncados). 4096 da margen para imagen + prompt.
+        ctx_size: 4096,
       },
     });
 
@@ -43,8 +48,13 @@ export async function getOrLoadQvacModel(): Promise<string> {
 
 /**
  * Ejecuta una inferencia multimodal con una imagen local y un prompt de texto.
+ * `responseFormat` permite forzar la gramatica de salida (p.ej. json_schema) via el SDK.
  */
-export async function runQvacMultimodal(imagePath: string, prompt: string): Promise<string> {
+export async function runQvacMultimodal(
+  imagePath: string,
+  prompt: string,
+  options?: { responseFormat?: Record<string, unknown> }
+): Promise<string> {
   const sdk = await getSdk();
   const { completion } = sdk;
   const modelId = await getOrLoadQvacModel();
@@ -63,6 +73,7 @@ export async function runQvacMultimodal(imagePath: string, prompt: string): Prom
     modelId,
     history,
     stream: false,
+    ...(options?.responseFormat ? { responseFormat: options.responseFormat as any } : {}),
   });
 
   const final = await run.final;

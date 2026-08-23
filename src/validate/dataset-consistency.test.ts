@@ -21,7 +21,10 @@ interface GtEntry {
 }
 
 describe.skipIf(!hasDataset)("validate() contra el dataset generado", () => {
-  const entries: GtEntry[] = JSON.parse(readFileSync(gtPath, "utf-8"));
+  // skipIf solo salta los it() de abajo; vitest igual ejecuta el cuerpo del describe durante la
+  // coleccion de tests, asi que leer el archivo sin el guard de hasDataset revienta con ENOENT
+  // en un clon limpio que aun no corrio `npm run gen:dataset`.
+  const entries: GtEntry[] = hasDataset ? JSON.parse(readFileSync(gtPath, "utf-8")) : [];
 
   it("tiene 40 facturas", () => {
     expect(entries).toHaveLength(40);

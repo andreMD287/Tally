@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateCryptoCertificate } from "./crypto-certificate.js";
+import { generateCryptoCertificate, QVAC_ENGINE_INFO } from "./crypto-certificate.js";
 import type { Invoice, MatchResult } from "../types.js";
 import os from "node:os";
 
@@ -29,9 +29,9 @@ describe("Cryptographic SHA-256 Audit Certificate", () => {
     { invoice: inv2, match: null, matchType: "sin_match", score: 0 },
   ];
 
-  it("generates a valid certificate with SHA-256 digest and environment specs", async () => {
+  it("generates a valid certificate with SHA-256 digest and environment specs when QVAC actually ran", async () => {
     const tmpDir = os.tmpdir();
-    const cert = await generateCryptoCertificate([inv1, inv2], matches, tmpDir);
+    const cert = await generateCryptoCertificate([inv1, inv2], matches, tmpDir, QVAC_ENGINE_INFO);
 
     expect(cert.certificateId).toMatch(/^TALLY-AUDIT-[A-F0-9]{8}$/);
     expect(cert.integrity.batchDigestSha256).toHaveLength(64);
@@ -39,6 +39,14 @@ describe("Cryptographic SHA-256 Audit Certificate", () => {
     expect(cert.integrity.conciliatedInvoices).toBe(1);
     expect(cert.privacyProof.model).toContain("SmolVLM2-500M");
     expect(cert.privacyProof.networkTransmissions).toContain("0 bytes");
+  });
+
+  it("never claims SmolVLM2/on-device inference ran when no engine info is passed (mock/ground-truth runs)", async () => {
+    const tmpDir = os.tmpdir();
+    const cert = await generateCryptoCertificate([inv1, inv2], matches, tmpDir);
+
+    expect(cert.privacyProof.model).not.toContain("SmolVLM2");
+    expect(cert.privacyProof.mode).not.toContain("100% On-Device");
   });
 
   it("computes deterministic hash for identical invoice datasets", async () => {

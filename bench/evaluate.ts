@@ -96,7 +96,8 @@ async function runBenchmark() {
 
   for (let i = 0; i < groundTruth.length; i++) {
     const item = groundTruth[i];
-    const imagePath = path.join(facturasDir, item.file);
+    // item.file ya viene como "facturas/xxx.ext" (relativo a data/), no re-anidar bajo facturasDir.
+    const imagePath = path.join(facturasDir, path.basename(item.file));
 
     process.stdout.write(`[${i + 1}/${groundTruth.length}] Evaluating ${item.file}... `);
 

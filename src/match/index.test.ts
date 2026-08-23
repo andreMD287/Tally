@@ -109,9 +109,12 @@ const extractoPath = path.resolve("data/extracto.csv");
 const hasDataset = existsSync(gtPath) && existsSync(extractoPath);
 
 describe.skipIf(!hasDataset)("matchInvoices contra el dataset generado", () => {
-  const entries: { invoice: Invoice }[] = JSON.parse(readFileSync(gtPath, "utf-8"));
+  // skipIf solo salta los it() de abajo; vitest igual ejecuta el cuerpo del describe durante la
+  // coleccion de tests, asi que leer el archivo sin el guard de hasDataset revienta con ENOENT
+  // en un clon limpio que aun no corrio `npm run gen:dataset`.
+  const entries: { invoice: Invoice }[] = hasDataset ? JSON.parse(readFileSync(gtPath, "utf-8")) : [];
   const invoices = entries.map((e) => e.invoice);
-  const extracto = parseExtractoCsv(readFileSync(extractoPath, "utf-8"));
+  const extracto = hasDataset ? parseExtractoCsv(readFileSync(extractoPath, "utf-8")) : [];
 
   it("aproximadamente el 70% de las facturas encuentra pago", () => {
     const results = matchInvoices(invoices, extracto);

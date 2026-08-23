@@ -2,6 +2,10 @@ import type { ExtractoLinea, Invoice, MatchResult } from "../types.js";
 import { nameSimilarity } from "./similarity.js";
 
 const FECHA_TOLERANCIA_DIAS = 3;
+// Mismo margen que ARITH_TOLERANCE en validate/rules.ts: un VLM de <1B parametros puede
+// desviarse 1-2 unidades en un digito leido. Sin esto, ese ruido deja la factura en
+// PENDIENTE para siempre aunque un humano la aprobaria al toque.
+const MONTO_TOLERANCIA = 2;
 
 function daysDiff(isoA: string, isoB: string): number {
   const a = new Date(isoA + "T00:00:00Z").getTime();
@@ -13,6 +17,7 @@ interface Candidate {
   linea: ExtractoLinea;
   index: number;
   dateDiff: number;
+  amountDiff: number;
   nameScore: number;
 }
 
@@ -32,7 +37,7 @@ function findSplitMatch(
     for (let j = i + 1; j < enVentana.length; j++) {
       const a = enVentana[i];
       const b = enVentana[j];
-      if (a.linea.monto + b.linea.monto !== inv.total) continue;
+      if (Math.abs(a.linea.monto + b.linea.monto - inv.total) > MONTO_TOLERANCIA) continue;
       const nameScore = Math.max(
         nameSimilarity(inv.proveedor, a.linea.contraparte),
         nameSimilarity(inv.proveedor, b.linea.contraparte)
@@ -63,23 +68,25 @@ export function matchInvoices(invoices: Invoice[], extracto: ExtractoLinea[]): M
   for (const inv of ordenLoop) {
     const candidatos: Candidate[] = disponibles
       .filter(({ index }) => !usadas.has(index))
-      .filter(({ linea }) => linea.monto === inv.total)
+      .filter(({ linea }) => Math.abs(linea.monto - inv.total) <= MONTO_TOLERANCIA)
       .map(({ linea, index }) => ({
         linea,
         index,
         dateDiff: daysDiff(inv.fecha, linea.fecha),
+        amountDiff: Math.abs(linea.monto - inv.total),
         nameScore: nameSimilarity(inv.proveedor, linea.contraparte),
       }))
       .filter((c) => c.dateDiff <= FECHA_TOLERANCIA_DIAS);
 
     if (candidatos.length > 0) {
-      candidatos.sort((a, b) => b.nameScore - a.nameScore || a.dateDiff - b.dateDiff);
+      // Preferir monto exacto, luego mejor nombre, luego fecha mas cercana.
+      candidatos.sort((a, b) => a.amountDiff - b.amountDiff || b.nameScore - a.nameScore || a.dateDiff - b.dateDiff);
       const best = candidatos[0];
       usadas.add(best.index);
       results.set(inv, {
         invoice: inv,
         match: best.linea,
-        matchType: best.dateDiff === 0 ? "exacto" : "aproximado",
+        matchType: best.dateDiff === 0 && best.amountDiff === 0 ? "exacto" : "aproximado",
         score: best.nameScore,
       });
       continue;

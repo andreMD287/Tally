@@ -39,6 +39,9 @@ async function runStabilityMatrix() {
 
   const runResults: RunResult[] = [];
   const fieldVariance = new Map<string, number[]>();
+  const allLatencies: number[] = [];
+  let totalParsedAcrossRuns = 0;
+  const totalAttempted = runsCount * sampleLimit;
 
   for (let r = 1; r <= runsCount; r++) {
     process.stdout.write(`Executing Run [${r}/${runsCount}]... `);
@@ -48,9 +51,11 @@ async function runStabilityMatrix() {
     const latencies: number[] = [];
 
     for (const item of sample) {
-      const imgPath = path.join(facturasDir, item.file);
+      // item.file ya viene como "facturas/xxx.ext" (relativo a data/), no re-anidar bajo facturasDir.
+      const imgPath = path.join(facturasDir, path.basename(item.file));
       const res = await extractor(imgPath);
       latencies.push(res.latencyMs);
+      allLatencies.push(res.latencyMs);
 
       if (res.invoice) {
         parsedCount++;
@@ -72,6 +77,7 @@ async function runStabilityMatrix() {
       allMatchCount: perfectMatchCount,
       avgLatencyMs: avgLat,
     });
+    totalParsedAcrossRuns += parsedCount;
     console.log(`Completed in ${Date.now() - startRun}ms (Exact: ${perfectMatchCount}/${sampleLimit})`);
   }
 
@@ -84,13 +90,18 @@ async function runStabilityMatrix() {
   }
 
   const consistencyRate = ((consistentInvoices / sampleLimit) * 100).toFixed(1);
+  const parseSuccessRate = ((totalParsedAcrossRuns / totalAttempted) * 100).toFixed(1);
+  const meanLatency = allLatencies.reduce((a, b) => a + b, 0) / (allLatencies.length || 1);
+  const latencyStdDev = Math.sqrt(
+    allLatencies.reduce((sum, v) => sum + (v - meanLatency) ** 2, 0) / (allLatencies.length || 1)
+  );
 
   console.log(`\n======================================================`);
   console.log(`  MULTI-RUN STABILITY RESULTS (N=${runsCount})`);
   console.log(`======================================================`);
   console.log(`- Determinism / Multi-Run Consistency: ${consistencyRate}% (${consistentInvoices}/${sampleLimit})`);
-  console.log(`- Average JSON Parse Success Rate:     100.0%`);
-  console.log(`- Latency Standard Deviation:          Low (<15ms)`);
+  console.log(`- JSON Parse Success Rate:              ${parseSuccessRate}% (${totalParsedAcrossRuns}/${totalAttempted})`);
+  console.log(`- Latency Standard Deviation:            ${Math.round(latencyStdDev)}ms (mean ${Math.round(meanLatency)}ms)`);
 
   const reportMd = `# Multi-Run Reliability and Stability Matrix (Track 2)
 
@@ -108,7 +119,8 @@ ${runResults.map((r) => `| Run ${r.runIndex} | ${r.totalParsed}/${sampleLimit} |
 ## Reliability Analysis & Failure Mapping
 
 - **Multi-Run Determinism**: ${consistencyRate}% identical output coherence across ${runsCount} iterations.
-- **Schema Resilience**: 100% adherence to \`InvoiceSchema\` using sanitization and structured fallback.
+- **JSON Parse Success Rate**: ${parseSuccessRate}% (${totalParsedAcrossRuns}/${totalAttempted}) adherence to \`InvoiceSchema\` using sanitization and structured fallback.
+- **Latency**: mean ${Math.round(meanLatency)}ms, stddev ${Math.round(latencyStdDev)}ms across ${allLatencies.length} calls.
 - **Honest Failure Mapping**: Residual discrepancies correspond to deliberate test anomalies (invalid tax checksum digits in test fixtures or 30% visual degradation).
 `;
 

@@ -67,7 +67,7 @@ flowchart TD
 
 2. **Multi-Jurisdiction Tax Validation Engine**:
    Native, deterministic validation for tax checksums and legal tax structures across four jurisdictions:
-   - **Colombia**: DIAN NIT Modulo 11 weighted algorithm (`[41, 37, 29, 23, 19, 17, 13, 7, 3]`), VAT rates (19%, 5%, 0%).
+   - **Colombia**: DIAN NIT Modulo 11 weighted algorithm (`[3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71]`, applied right-to-left), VAT rates (19%, 5%, 0%).
    - **Argentina**: ARCA/AFIP CUIT Modulo 11 algorithm (`[5, 4, 3, 2, 7, 6, 5, 4, 3, 2]`), VAT rates (21%, 10.5%, 27%, 0%).
    - **Mexico**: SAT RFC structure and homoclave verification, VAT rates (16%, 8%, 0%).
    - **Global**: General subtotal/tax balance verification with configurable tolerance.
@@ -196,7 +196,7 @@ npm run bench:stability
 ```
 
 ### 6. The Vault Guardian Challenge Suite ($500 USDt)
-Executes 5 prompt-injection attack vectors against the Vault Guardian:
+Generates 5 prompt-injection attack vectors to run manually against the Vault Guardian (the script prints and saves the payloads; it does not itself call the challenge endpoint):
 ```bash
 npm run vault:crack
 ```

@@ -7,7 +7,7 @@ import { matchInvoices } from "./src/match/index.js";
 import { parseExtractoCsv } from "./src/ingest/extracto.js";
 import { dedupeByInvoiceNumber } from "./src/ingest/dedupe.js";
 import { buildLibroComprasCsv, buildDiscrepanciasMd, type Reconciled } from "./src/report/index.js";
-import { generateCryptoCertificate } from "./src/report/crypto-certificate.js";
+import { generateCryptoCertificate, QVAC_ENGINE_INFO, type EngineInfo } from "./src/report/crypto-certificate.js";
 import type { Invoice } from "./src/types.js";
 
 interface ExtractedItem {
@@ -76,12 +76,23 @@ Options:
     setJurisdiction(rest[countryFlagIdx + 1]);
   }
 
-  if (useQvac) {
+  let engineInfo: EngineInfo = {
+    source: "mock",
+    model: "none (mock extractor, no vision model executed)",
+    quantization: "n/a",
+    hardwareRuntime: "n/a",
+  };
+
+  if (groundTruthPath) {
+    engineInfo = { source: "ground-truth", model: "none (pre-computed ground-truth dataset, no extraction executed)", quantization: "n/a", hardwareRuntime: "n/a" };
+    console.log("Extraction Engine: Ground-Truth (no extraction executed)");
+  } else if (useQvac) {
     setExtractor(qvacExtract);
+    engineInfo = QVAC_ENGINE_INFO;
     console.log("Extraction Engine: QVAC (SmolVLM2-500M Local)");
-  } else if (useMock) {
+  } else {
     setExtractor(mockExtract);
-    console.log("Extraction Engine: Mock / Deterministic");
+    console.log(`Extraction Engine: Mock / Deterministic${useMock ? "" : " (default — pass --qvac for the real model)"}`);
   }
 
   console.log("==================================================================");
@@ -138,7 +149,8 @@ Options:
   const cert = await generateCryptoCertificate(
     reconciled.map((r) => r.invoice),
     matches,
-    outDir
+    outDir,
+    engineInfo
   );
 
   const ok = reconciled.filter((r) => r.validation.ok).length;

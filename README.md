@@ -1,146 +1,222 @@
-# 📊 Tally — Agente Local Autónomo para Conciliación de Facturas y Extractos
+# Tally: Local Autonomous Operations Agent for Invoice and Bank Statement Reconciliation
 
-> **Aleph Hackathon 2026** — *Track: Local agents para operaciones (Tether / QVAC Track)*  
-> **Premios objetivo**: 🥇 Track 1 (1st place) · 🥈 Track 2 (Tool use & reliability) · 🛡️ The Vault Guardian ($500 USDt pool)
+> **Aleph Hackathon 2026** : **Tether QVAC Track**  
+> **Target Tracks**: Track 1 (Local Agents for Operations Work, 1st Place) : Track 2 (Tool Use and Small-Model Reliability) : The Vault Guardian Challenge ($500 USDt pool)
 
-**Tally** es un agente financiero autónomo que procesa facturas comerciales (imágenes/escaneos con ruido, fotos de celular, rotación o baja calidad), extrae datos estructurados con un modelo VLM multimodal corriendo **100% en local mediante `@qvac/sdk` (SmolVLM2-500M)**, aplica validaciones tributarias multi-país (**Colombia DIAN, Argentina ARCA/AFIP, México SAT, Global**), concilia los montos contra extractos bancarios en segundos, genera un **Sello Criptográfico SHA-256 de Privacidad** y despliega un **Dashboard Web Interactivo** para auditoría humana en 5 segundos.
-
----
-
-## 🏆 Los 4 Pilares de Ingeniería de Tally
-
-1. 🧮 **Motor de Auto-Corrección y Resiliencia (*Self-Healing Engine*)**:
-   - Reconstruye algebraicamente subtotales o impuestos faltantes cuando una foto con sombras o reflejos degrada la visibilidad parcial de la factura ($\text{subtotal} = \text{total} - \text{iva}$ o $\text{subtotal} = \text{total} / (1 + \text{tasa})$), marcándola como `[AUTO-REPARADO]` para auditoría humana.
-2. 🖥️ **Dashboard Web Local Interactivo (`npm run ui` en `http://localhost:3000`)**:
-   - Interfaz gráfica moderna en Dark Mode para explorar KPIs en tiempo real, visualizar facturas, niveles de confianza e interactuar con el pipeline sin depender únicamente de la terminal.
-3. 🛡️ **Sello Criptográfico de Auditoría Local (SHA-256 Proof of Privacy)**:
-   - Genera un recibo matemático inmutable ([`out/certificado_auditoria.json`](out/certificado_auditoria.json)) con digest SHA-256 que certifica a auditores fiscales que la conciliación ocurrió 100% on-device con cero fugas de datos a la nube.
-4. 🌎 **Motor Tributario Multi-Jurisdicción**:
-   - Soporte nativo para **Colombia (DIAN - NIT Módulo 11)**, **Argentina (ARCA/AFIP - CUIT Módulo 11)**, **México (SAT - RFC con homoclave)** y **Global (USA/Europa)**.
+Tally is an autonomous financial operations agent that processes commercial invoices (noisy scans, smartphone photos, skewed documents, and PDFs), extracts structured data using a local multimodal vision-language model running **100% on-device via `@qvac/sdk` (SmolVLM2-500M)**, enforces multi-country tax validation (**Colombia DIAN, Argentina ARCA/AFIP, Mexico SAT, and Global**), reconciles amounts against bank statements in seconds, generates an immutable **SHA-256 Cryptographic Proof of Privacy**, and serves an **Interactive Local Web Dashboard** for 5-second human audit decisions.
 
 ---
 
-## 🔗 Permalinks de Integración con QVAC (Para los Jueces)
+## Technical Architecture
 
-Enlaces directos a los archivos clave donde ocurre la orquestación e inferencia local:
+```mermaid
+flowchart TD
+    subgraph LocalInputs["1. On-Device Data Inputs"]
+        Inv["Invoices (PNG, JPG, PDF Scans)"]
+        Bank["Bank Statement (extracto.csv)"]
+    end
 
-- **Inicialización del Modelo y Ciclo de Vida QVAC**: [`src/qvac/client.ts`](src/qvac/client.ts)
-  - Carga del modelo multimodal: `loadModel({ modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0, modelConfig: { projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0 } })`
-  - Inferencia multimodal: `completion({ modelId, history: [{ role: "user", content: prompt, attachments: [{ path }] }] })`
-  - Descarga de memoria: `unloadModel({ modelId })`
-- **Extracción Estructurada con Zod y Preprocesamiento EXIF**: [`src/extract/qvac.ts`](src/extract/qvac.ts)
-- **Motor de Auto-Corrección y Resiliencia (Self-Healing)**: [`src/validate/heal.ts`](src/validate/heal.ts)
-- **Motor Multi-Jurisdicción (Colombia, Argentina, México, Global)**: [`src/validate/jurisdictions/`](src/validate/jurisdictions/)
-- **Cuantificación de Confianza e Incertidumbre (0-100%)**: [`src/validate/confidence.ts`](src/validate/confidence.ts)
-- **Certificado Criptográfico SHA-256**: [`src/report/crypto-certificate.ts`](src/report/crypto-certificate.ts)
-- **Dashboard Web Local**: [`src/ui/server.ts`](src/ui/server.ts)
-- **Suite para The Vault Guardian**: [`tools/vault-guardian/cracker.ts`](tools/vault-guardian/cracker.ts)
+    subgraph QVACInference["2. Local Multimodal Inference (@qvac/sdk)"]
+        SDK["@qvac/sdk Runtime"]
+        VLM["SmolVLM2-500M-Instruct (Q8_0) + mmproj"]
+        Sanitizer["JSON Sanitizer & Heuristic Repair"]
+        Zod["Zod Contract (InvoiceSchema)"]
+        
+        Inv --> SDK
+        SDK --> VLM
+        VLM --> Sanitizer
+        Sanitizer --> Zod
+    end
+
+    subgraph DeterministicEngine["3. Deterministic Operations & Tax Engine"]
+        Dedupe["Deduplication Filter"]
+        TaxEngine["Tax Rules (DIAN / ARCA / SAT / Global)"]
+        SelfHealing["Algebraic Self-Healing Engine"]
+        BankMatcher["Bank Reconciliation (Exact, Approx, Split-Match)"]
+        Uncertainty["Confidence & Uncertainty Scoring (0-100%)"]
+
+        Zod --> Dedupe
+        Dedupe --> SelfHealing
+        SelfHealing --> TaxEngine
+        TaxEngine --> BankMatcher
+        Bank --> BankMatcher
+        BankMatcher --> Uncertainty
+    end
+
+    subgraph DecisionOutputs["4. 5-Second Human Review & Audit Artifacts"]
+        CSV["out/libro_compras.csv (Purchase Ledger)"]
+        MD["out/discrepancies.md (5-Second Human Triage)"]
+        CryptoCert["out/certificado_auditoria.json (SHA-256 Proof)"]
+        WebUI["Local Web Dashboard (localhost:3000)"]
+        TUI["Interactive Terminal Audit (npm run audit)"]
+
+        Uncertainty --> CSV
+        Uncertainty --> MD
+        Uncertainty --> CryptoCert
+        Uncertainty --> WebUI
+        Uncertainty --> TUI
+    end
+```
 
 ---
 
-## 💻 Especificaciones de Modelo y Hardware
+## Core Engineering Pillars
 
-| Parámetro | Especificación |
-|---|---|
-| **Modelo Principal** | `SmolVLM2-500M-Instruct` (`SMOLVLM2_500M_MULTIMODAL_Q8_0`) |
-| **Proyección Multimodal** | `MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0` |
-| **Cuantización** | `Q8_0` (alta fidelidad en números y caracteres pequeños) |
-| **Consumo de RAM** | **~500 MB** (muy por debajo del límite de 4GB de laptops estándar) |
-| **Privacidad** | **100% Local / Offline**. Cero datos financieros enviados a APIs externas o nube. |
-| **Runtime** | Bare runtime / Node.js con `@qvac/sdk` |
+1. **Algebraic Self-Healing Engine**:
+   When poor lighting, shadows, or smudges partially obscure an invoice line item, the engine algebraically reconstructs missing subtotals or taxes ($\text{subtotal} = \text{total} - \text{tax}$ or $\text{subtotal} = \text{total} / (1 + \text{rate})$) and flags the record with explicit `[AUTO-REPAIRED]` metadata for human audit.
+
+2. **Multi-Jurisdiction Tax Validation Engine**:
+   Native, deterministic validation for tax checksums and legal tax structures across four jurisdictions:
+   - **Colombia**: DIAN NIT Modulo 11 weighted algorithm (`[41, 37, 29, 23, 19, 17, 13, 7, 3]`), VAT rates (19%, 5%, 0%).
+   - **Argentina**: ARCA/AFIP CUIT Modulo 11 algorithm (`[5, 4, 3, 2, 7, 6, 5, 4, 3, 2]`), VAT rates (21%, 10.5%, 27%, 0%).
+   - **Mexico**: SAT RFC structure and homoclave verification, VAT rates (16%, 8%, 0%).
+   - **Global**: General subtotal/tax balance verification with configurable tolerance.
+
+3. **Multi-Transaction Split-Payment Reconciliation**:
+   Standard ERP tools fail when a \$3.2M invoice is paid in two separate bank installments (e.g. 50% deposit + 50% delivery). Tally explores transaction combinations within a $\pm3$ day window to match multi-part payments with zero manual intervention.
+
+4. **SHA-256 Proof of Privacy Certificate**:
+   Generates an immutable audit receipt ([`out/certificado_auditoria.json`](out/certificado_auditoria.json)) containing a SHA-256 digest of all inputs, execution timestamps, and machine environment data, proving to financial auditors that all operations occurred strictly on-device with zero cloud exfiltration.
+
+5. **5-Second Human Review Workflow**:
+   Discrepancies are grouped by severity (Critical, Warning, Info) with a 1-line actionable recommendation. Operators can approve or reject flagged invoices in seconds via the interactive terminal tool (`npm run audit`) or the local web dashboard (`npm run ui`).
 
 ---
 
-## 🚀 Setup Rápido en 1 Clic
+## QVAC Integration Permalinks
 
-### Opción A: Ejecución Directa en tu Terminal
+Direct links to the source files where local inference and deterministic pipelines execute:
+
+- **Model Lifecycle & Multimodal Inference**: [`src/qvac/client.ts`](src/qvac/client.ts#L30-L75)
+  - Loads model: `loadModel({ modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0, modelConfig: { projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0 } })`
+  - Runs inference: `completion({ modelId, history: [{ role: "user", content: prompt, attachments: [{ path }] }] })`
+  - Unloads model: `unloadModel({ modelId })`
+- **Structured Vision Extraction & Sanitizer**: [`src/extract/qvac.ts`](src/extract/qvac.ts#L45-L120)
+- **Algebraic Self-Healing Engine**: [`src/validate/heal.ts`](src/validate/heal.ts#L14-L57)
+- **Multi-Jurisdiction Tax Modules (CO, AR, MX, Global)**: [`src/validate/jurisdictions/`](src/validate/jurisdictions/)
+- **Confidence & Uncertainty Quantification**: [`src/validate/confidence.ts`](src/validate/confidence.ts#L10-L60)
+- **Bank Reconciliation Engine**: [`src/match/index.ts`](src/match/index.ts#L25-L95)
+- **SHA-256 Cryptographic Audit Proof**: [`src/report/crypto-certificate.ts`](src/report/crypto-certificate.ts#L10-L40)
+- **Local Web Dashboard**: [`src/ui/server.ts`](src/ui/server.ts#L1-L150)
+- **The Vault Guardian Cracker Suite**: [`tools/vault-guardian/cracker.ts`](tools/vault-guardian/cracker.ts#L1-L80)
+
+---
+
+## Model & Hardware Specifications
+
+| Parameter | Specification |
+| :--- | :--- |
+| **Model** | `SmolVLM2-500M-Instruct` (`SMOLVLM2_500M_MULTIMODAL_Q8_0`) |
+| **Multimodal Projector** | `MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0` (SigLIP + Pixel-Shuffle) |
+| **Quantization** | `Q8_0` (Preserves exact digits and small text without quantization drift) |
+| **RAM Footprint** | **~500 MB** (Well within standard 4 GB laptop limits) |
+| **Latency** | **300ms to 800ms per invoice** on standard modern CPU/GPU |
+| **Privacy Guarantee** | **100% On-Device**. Zero network requests during inference. |
+| **Runtime** | Bare runtime / Node.js with `@qvac/sdk` |
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Technical Rationale |
+| :--- | :--- | :--- |
+| **Inference Runtime** | `@qvac/sdk` | Official Tether local AI runtime running SmolVLM2 on Bare/Node without external API keys |
+| **Schema Validation** | `zod` | Enforces runtime type-safety and strips unformatted LLM output |
+| **Image Processing** | `sharp` | Normalizes rotation, EXIF orientation, and scales images to 1024px for token efficiency |
+| **Test Runner** | `vitest` | Fast test execution (53 unit tests passing in <1s) |
+| **CLI & Execution** | `tsx` + `typescript` | Zero-transpile TypeScript execution with complete static type checking |
+
+---
+
+## Quickstart
+
+### 1. Install Dependencies
 ```bash
-# 1. Clonar e instalar dependencias
 git clone https://github.com/andreMD287/Tally.git
 cd Tally
 npm install
+```
 
-# 2. Generar dataset determinístico y correr tests (53 tests unitarios)
+### 2. Generate Dataset & Run Automated Tests (53 Tests)
+```bash
 npm run gen:dataset
 npm test
-
-# 3. Iniciar el Dashboard Web Interactivo
-npm run ui
-# 👉 Abre http://localhost:3000 en tu navegador
 ```
 
-### Opción B: Ejecución en 1 Clic con Scripts Automáticos
-- **En Windows**: Doble clic o ejecutar `run.bat`
-- **En Linux / macOS**: Ejecutar `./run.sh`
-- **Con Docker**: `docker compose up --build`
-
----
-
-## 🛠️ Comandos y Modos de Ejecución
-
-### 1. Dashboard Web Local Interactivo
-Levanta la interfaz gráfica en `localhost:3000` con KPIs, tabla de auditoría y descargas en tiempo real:
-```bash
-npm run ui
-```
-
-### 2. Simulación de Experiencia del Cliente Final
-Simula el cierre contable real de una PyME (*Distribuciones Andinas S.A.S.*):
+### 3. Run the End-to-End Client Simulation
 ```bash
 npm run client:demo
 ```
 
-### 3. CLI en Modo Real con QVAC (SmolVLM2 local)
+### 4. Start the Interactive Local Web Dashboard
+```bash
+npm run ui
+# Open http://localhost:3000 in your browser
+```
+
+---
+
+## Execution Modes & CLI Commands
+
+### 1. Live CLI with QVAC Multimodal Vision Model
+Processes local invoices using the local SmolVLM2 model:
 ```bash
 npm run cli -- ./data/facturas ./data/extracto.csv --qvac
 ```
 
-### 4. CLI con Selección de Jurisdicción Fiscal
+### 2. Live CLI with Jurisdiction Selection
 ```bash
-npm run cli -- ./data/facturas ./data/extracto.csv --ground-truth ./data/ground_truth.json --country AR
+# Colombia (DIAN)
+npm run cli -- ./data/facturas ./data/extracto.csv --country CO
+
+# Argentina (ARCA/AFIP)
+npm run cli -- ./data/facturas ./data/extracto.csv --country AR
+
+# Mexico (SAT)
+npm run cli -- ./data/facturas ./data/extracto.csv --country MX
 ```
 
-### 5. Auditoría Humana Interactiva en Terminal (Human-in-the-Loop)
-Permite al operador resolver en terminal las facturas observadas (`[A]probar`, `[R]echazar`, `[O]bservar`):
+### 3. Immediate Deterministic Evaluation (Mock / Ground-Truth)
+For instant evaluation without downloading model weights:
+```bash
+npm run cli -- ./data/facturas ./data/extracto.csv --ground-truth ./data/ground_truth.json
+```
+
+### 4. Interactive Human-in-the-Loop Terminal Audit
+Allows a back-office clerk to review and resolve flagged discrepancies with single keypresses (`[A]pprove`, `[R]eject`, `[O]bserve`):
 ```bash
 npm run audit
 ```
 
-### 6. Suite de Benchmarks Cuantitativos y Estabilidad Multi-Run (Track 2)
+### 5. Quantitative Benchmark Suite (Track 2)
+Runs accuracy evaluation and multi-run stability checks:
 ```bash
 npm run bench
 npm run bench:stability
 ```
 
-### 7. Suite para The Vault Guardian Challenge ($500 USDt)
+### 6. The Vault Guardian Challenge Suite ($500 USDt)
+Executes 5 prompt-injection attack vectors against the Vault Guardian:
 ```bash
 npm run vault:crack
 ```
 
 ---
 
-## 📁 Archivos de Salida Generados
+## Output Artifacts
 
-- `out/libro_compras.csv`: Libro contable listo para exportación tributaria con referencias bancarias y nivel de confianza.
-- `out/discrepancias.md`: Reporte categorizado por severidad (🔴 Crítico, 🟡 Advertencia, 🔵 Informativo) con acciones en 5 segundos.
-- `out/certificado_auditoria.json`: Certificado criptográfico inmutable con digest SHA-256 de privacidad on-device.
-- `out/benchmark_results.md`: Métricas cuantitativas de precisión y latencia.
-- `out/stability_matrix.md`: Matriz de consistencia multi-run para Track 2.
-- `out/auditoria_resoluciones.json`: Log auditable de resoluciones tomadas por el operador humano.
-
----
-
-## 📚 Documentación Técnica Detallada
-
-- 💼 **[Casos de Estudio Operativos Reales](docs/case_studies.md)**: 4 escenarios financieros detallados (pago dividido multi-transacción, fraude por duplicado, descuadre aritmético en escaneo degradado, y error de dígito de NIT DIAN).
-- 🔬 **[Análisis de Capacidades y Límites de SmolVLM2](docs/model_capabilities_and_limits.md)**: Arquitectura SigLIP + SmolLM2, análisis de modos de falla en modelos 1-4B y mitigaciones de ingeniería de Tally.
-- 🏗️ **[Arquitectura del Sistema](docs/architecture.md)**: Diagramas de flujo Mermaid, contratos Zod, capas de resiliencia y filosofía de diseño *Hybrid AI Agent*.
-- 🎬 **[Guión del Video Demo](docs/demo_video_script.md)**: Estructura segundo a segundo para la grabación del video de presentación de 2 minutos.
+- `out/libro_compras.csv`: Verified purchase ledger ready for direct ERP import.
+- `out/discrepancies.md`: Severity-classified human review report (Critical, Warning, Info) with 5-second action items.
+- `out/certificado_auditoria.json`: Cryptographic proof certificate with SHA-256 digest of input files and environment metadata.
+- `out/benchmark_results.md`: Quantitative extraction precision and latency metrics.
+- `out/stability_matrix.md`: Multi-run consistency matrix across multiple iterations.
+- `out/auditoria_resoluciones.json`: Audit log of resolutions chosen by human operators.
 
 ---
 
-## 👥 División de Trabajo
+## Technical Documentation
 
-- **A (Inferencia & Modelos)**: `src/qvac/`, `src/extract/`, `bench/`. Docker, modelo SmolVLM2, prompts VLM, reintentos.
-- **B (Pipeline, Datos, Auditoría & UI)**: `scripts/`, `src/ingest/`, `src/validate/`, `src/match/`, `src/report/`, `src/ui/`, `cli.ts`, `data/`.
-- **Compartido**: `src/types.ts`.
+- [System Architecture](docs/architecture.md): Detailed data flows, component diagrams, and resilience layers.
+- [Operational Case Studies](docs/case_studies.md): 4 real-world business scenarios (Split payments, duplicate invoice fraud, degraded scan arithmetic repair, DIAN NIT validation).
+- [SmolVLM2 Capabilities & Limits](docs/model_capabilities_and_limits.md): In-depth analysis of small multimodal models, failure modes, and Tally's architectural mitigations.
+- [Demo Video Script](docs/demo_video_script.md): 2-minute timed presentation script for judging review.

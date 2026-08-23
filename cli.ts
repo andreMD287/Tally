@@ -10,16 +10,16 @@ import { buildLibroComprasCsv, buildDiscrepanciasMd, type Reconciled } from "./s
 import { generateCryptoCertificate } from "./src/report/crypto-certificate.js";
 import type { Invoice } from "./src/types.js";
 
-interface Extraida {
+interface ExtractedItem {
   file: string;
   invoice: Invoice;
   repairs?: string[];
 }
 
-async function loadFromImages(facturasDir: string): Promise<Extraida[]> {
+async function loadFromImages(facturasDir: string): Promise<ExtractedItem[]> {
   const files = (await readdir(facturasDir)).filter((f) => /\.(png|jpe?g|webp)$/i.test(f));
-  const out: Extraida[] = [];
-  console.log(`\n🔍 Extrayendo datos de ${files.length} imágenes en ${facturasDir}...`);
+  const out: ExtractedItem[] = [];
+  console.log(`\nExtracting data from ${files.length} document images in ${facturasDir}...`);
 
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
@@ -28,23 +28,21 @@ async function loadFromImages(facturasDir: string): Promise<Extraida[]> {
     const result = await extract(full);
 
     if (!result.invoice) {
-      console.log(`❌ FALLÓ tras ${result.attempts} intento(s): ${result.error ?? "desconocido"}`);
+      console.log(`FAILED after ${result.attempts} attempt(s): ${result.error ?? "unknown error"}`);
       continue;
     }
 
-    // Auto-corrección aritmética y resiliencia
     const healRes = healInvoice(result.invoice);
-    const healMsg = healRes.healed ? ` 🩹 [Auto-Reparado: ${healRes.repairs.length}]` : "";
+    const healMsg = healRes.healed ? ` [Auto-Repaired: ${healRes.repairs.length}]` : "";
 
-    console.log(`✅ OK [${result.latencyMs}ms] (${healRes.invoice.proveedor.slice(0, 20)} - $${healRes.invoice.total.toLocaleString("es-CO")})${healMsg}`);
+    console.log(`OK [${result.latencyMs}ms] (${healRes.invoice.proveedor.slice(0, 20)} - $${healRes.invoice.total.toLocaleString("en-US")})${healMsg}`);
     out.push({ file: f, invoice: healRes.invoice, repairs: healRes.repairs });
   }
   return out;
 }
 
-/** Modo prueba: usa el ground truth como si fuera la salida perfecta del modelo, para validar la logica del pipeline sola. */
-async function loadFromGroundTruth(gtPath: string): Promise<Extraida[]> {
-  console.log(`\n📖 Cargando ground truth desde ${gtPath}...`);
+async function loadFromGroundTruth(gtPath: string): Promise<ExtractedItem[]> {
+  console.log(`\nLoading ground truth dataset from ${gtPath}...`);
   const raw = JSON.parse(await readFile(gtPath, "utf-8")) as { file: string; invoice: Invoice }[];
   return raw.map((e) => {
     const healRes = healInvoice(e.invoice);
@@ -56,14 +54,14 @@ async function main() {
   const [, , facturasDirArg, extractoCsvArg, ...rest] = process.argv;
   if (!facturasDirArg || !extractoCsvArg) {
     console.log(`
-Uso:
-  npm run cli -- <carpeta-facturas> <extracto.csv> [opciones]
+Usage:
+  npm run cli -- <invoices-dir> <bank-statement.csv> [options]
 
-Opciones:
-  --ground-truth <archivo.json>   Usa el dataset de ground truth en vez de invocar el modelo VLM
-  --qvac                          Usa QVAC con SmolVLM2 localmente para extraer las facturas
-  --mock                          Usa el extractor mock (por defecto si no se especifica --qvac)
-  --country <CO|AR|MX|GLOBAL>     Define la jurisdicción tributaria (por defecto CO / Colombia DIAN)
+Options:
+  --ground-truth <file.json>   Use ground-truth dataset instead of calling VLM model
+  --qvac                       Use local QVAC SmolVLM2 model for multimodal extraction
+  --mock                       Use mock extractor (default if --qvac is not specified)
+  --country <CO|AR|MX|GLOBAL>  Select tax jurisdiction (default: CO / Colombia DIAN)
     `);
     process.exit(1);
   }
@@ -80,40 +78,40 @@ Opciones:
 
   if (useQvac) {
     setExtractor(qvacExtract);
-    console.log("⚡ Motor de extracción: QVAC (SmolVLM2-500M local)");
+    console.log("Extraction Engine: QVAC (SmolVLM2-500M Local)");
   } else if (useMock) {
     setExtractor(mockExtract);
-    console.log("⚡ Motor de extracción: Mock");
+    console.log("Extraction Engine: Mock / Deterministic");
   }
 
   console.log("==================================================================");
-  console.log("  TALLY: Pipeline de Conciliación de Facturas y Extracto Bancario");
-  console.log(`  Jurisdicción Activa: ${getActiveJurisdiction().countryName}`);
+  console.log("  TALLY: Local Autonomous Invoice & Bank Reconciliation Pipeline");
+  console.log(`  Active Jurisdiction: ${getActiveJurisdiction().countryName}`);
   console.log("==================================================================");
 
   const extraidasConDuplicados = groundTruthPath
     ? await loadFromGroundTruth(groundTruthPath)
     : await loadFromImages(facturasDirArg);
 
-  // Paso 1: Deduplicación
+  // Step 1: Deduplication
   const { unicas: extraidas, duplicadas } = dedupeByInvoiceNumber(extraidasConDuplicados);
-  console.log(`\n🧹 Deduplicación:`);
-  console.log(`  - Total procesadas: ${extraidasConDuplicados.length}`);
-  console.log(`  - Facturas únicas:  ${extraidas.length}`);
-  console.log(`  - Duplicadas desc.: ${duplicadas.length}`);
+  console.log(`\nDeduplication:`);
+  console.log(`  - Total Processed:   ${extraidasConDuplicados.length}`);
+  console.log(`  - Unique Invoices:   ${extraidas.length}`);
+  console.log(`  - Duplicates Found:  ${duplicadas.length}`);
 
-  // Paso 2: Ingesta de Extracto Bancario
+  // Step 2: Bank Statement Ingestion
   const extractoText = await readFile(extractoCsvArg, "utf-8");
   const extracto = parseExtractoCsv(extractoText);
-  console.log(`\n🏦 Extracto Bancario: ${extracto.length} movimientos cargados.`);
+  console.log(`\nBank Statement: ${extracto.length} transactions loaded.`);
 
-  // Paso 3: Conciliación Inteligente (monto, fecha, tolerancia, split match)
+  // Step 3: Bank Reconciliation
   const matches = matchInvoices(
     extraidas.map((e) => e.invoice),
     extracto
   );
 
-  // Paso 4: Validación de Reglas de Negocio
+  // Step 4: Tax & Business Rule Validation
   const reconciled: Reconciled[] = extraidas.map((e, i) => ({
     sourceFile: e.file,
     invoice: e.invoice,
@@ -128,7 +126,7 @@ Opciones:
     match: { invoice: e.invoice, match: null, matchType: "sin_match", score: 0 },
   }));
 
-  // Paso 5: Generación de Reportes y Certificado Criptográfico
+  // Step 5: Report Generation & Cryptographic Seal
   const outDir = path.resolve("out");
   await mkdir(outDir, { recursive: true });
   const libroComprasPath = path.join(outDir, "libro_compras.csv");
@@ -137,14 +135,12 @@ Opciones:
   await writeFile(libroComprasPath, buildLibroComprasCsv(reconciled));
   await writeFile(discrepanciasPath, buildDiscrepanciasMd(reconciled, duplicadasReconciled));
 
-  // Generación de Sello Criptográfico SHA-256
   const cert = await generateCryptoCertificate(
     reconciled.map((r) => r.invoice),
     matches,
     outDir
   );
 
-  // Resumen Estadístico
   const ok = reconciled.filter((r) => r.validation.ok).length;
   const exactos = reconciled.filter((r) => r.match.matchType === "exacto").length;
   const aprox = reconciled.filter((r) => r.match.matchType === "aproximado").length;
@@ -153,23 +149,23 @@ Opciones:
   const conciliadasTotal = exactos + aprox + divididos;
 
   console.log("\n==================================================================");
-  console.log("  RESUMEN DE EJECUCIÓN");
+  console.log("  EXECUTION SUMMARY");
   console.log("==================================================================");
-  console.log(`📋 Validación de Reglas:  ${ok}/${reconciled.length} válidas (${reconciled.length - ok} con observaciones)`);
-  console.log(`💰 Conciliación Bancaria: ${conciliadasTotal}/${reconciled.length} conciliadas (${((conciliadasTotal / (reconciled.length || 1)) * 100).toFixed(1)}%)`);
-  console.log(`   - Coincidencias exactas:     ${exactos}`);
-  console.log(`   - Coincidencias aproximadas: ${aprox}`);
-  console.log(`   - Pagos divididos (2 tx):    ${divididos}`);
-  console.log(`   - Sin coincidencia bancaria: ${sinMatch}`);
-  console.log(`\n🛡️ Sello Criptográfico:  ${cert.certificateId} (SHA-256: ${cert.integrity.batchDigestSha256.slice(0, 16)}...)`);
-  console.log(`\n📁 Reportes generados:`);
-  console.log(`   1. Libro de Compras:       ${libroComprasPath}`);
-  console.log(`   2. Discrepancias:          ${discrepanciasPath}`);
-  console.log(`   3. Certificado Cripto:     ${path.join(outDir, "certificado_auditoria.json")}`);
+  console.log(`Tax Rule Validation:  ${ok}/${reconciled.length} valid (${reconciled.length - ok} exceptions flagged)`);
+  console.log(`Bank Reconciliation:  ${conciliadasTotal}/${reconciled.length} reconciled (${((conciliadasTotal / (reconciled.length || 1)) * 100).toFixed(1)}%)`);
+  console.log(`   - Exact 1:1 Matches:      ${exactos}`);
+  console.log(`   - Approximate Matches:    ${aprox}`);
+  console.log(`   - Split-Payment Pairs:    ${divididos}`);
+  console.log(`   - Unreconciled / Pending: ${sinMatch}`);
+  console.log(`\nCryptographic Seal:   ${cert.certificateId} (SHA-256: ${cert.integrity.batchDigestSha256.slice(0, 16)}...)`);
+  console.log(`\nGenerated Artifacts:`);
+  console.log(`   1. Purchase Ledger:       ${libroComprasPath}`);
+  console.log(`   2. Discrepancy Triage:    ${discrepanciasPath}`);
+  console.log(`   3. Crypto Audit Proof:    ${path.join(outDir, "certificado_auditoria.json")}`);
   console.log("==================================================================\n");
 }
 
 main().catch((err) => {
-  console.error("Error en CLI:", err);
+  console.error("CLI Error:", err);
   process.exit(1);
 });

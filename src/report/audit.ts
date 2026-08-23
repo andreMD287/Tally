@@ -20,9 +20,9 @@ interface AuditResolution {
   numeroFactura: string;
   proveedor: string;
   total: number;
-  decision: "APROBADA" | "RECHAZADA" | "OBSERVADA";
+  decision: "APPROVED" | "REJECTED" | "FLAGGED";
   timestamp: string;
-  observaciones: string;
+  notes: string;
 }
 
 function parseCsv(content: string): AuditRow[] {
@@ -32,7 +32,6 @@ function parseCsv(content: string): AuditRow[] {
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    // Simple CSV parse with quote awareness
     const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
     const matches = [];
     let match;
@@ -67,10 +66,10 @@ async function askQuestion(rl: readline.Interface, query: string): Promise<strin
 
 async function main() {
   console.log(`
-╔═══════════════════════════════════════════════════════════════════════════╗
-║               TALLY - AUDITORÍA OPERATIVA EN 5 SEGUNDOS                   ║
-║         Human-in-the-Loop Triage para Discrepancias Financieras           ║
-╚═══════════════════════════════════════════════════════════════════════════╝
+=============================================================================
+               TALLY : 5-SECOND OPERATIONAL AUDIT TOOL
+         Human-in-the-Loop Triage for Financial Discrepancies
+=============================================================================
 `);
 
   const csvPath = path.resolve("out", "libro_compras.csv");
@@ -78,18 +77,18 @@ async function main() {
   try {
     csvRaw = await readFile(csvPath, "utf-8");
   } catch {
-    console.error("❌ No se encontró out/libro_compras.csv. Ejecuta primero 'npm run cli' o 'npm run demo'.");
+    console.error("Error: out/libro_compras.csv not found. Please run 'npm run cli' or 'npm run demo' first.");
     process.exit(1);
   }
 
   const rows = parseCsv(csvRaw);
   const flagged = rows.filter((r) => r.validacion === "ERROR" || r.conciliacion === "sin_match");
 
-  console.log(`📋 Total de facturas en libro: ${rows.length}`);
-  console.log(`🔍 Facturas marcadas para revisión humana: ${flagged.length}\n`);
+  console.log(`Total Invoices in Ledger: ${rows.length}`);
+  console.log(`Invoices Flagged for Human Review: ${flagged.length}\n`);
 
   if (flagged.length === 0) {
-    console.log("✅ No hay discrepancias pendientes por auditar.");
+    console.log("All invoices are clean. Zero pending discrepancies.");
     return;
   }
 
@@ -101,33 +100,33 @@ async function main() {
 
   for (let i = 0; i < flagged.length; i++) {
     const item = flagged[i];
-    console.log("───────────────────────────────────────────────────────────────────────────");
-    console.log(`[${i + 1}/${flagged.length}] FACTURA: ${item.numeroFactura || "(Sin número)"}`);
-    console.log(`  Proveedor:  ${item.proveedor} (NIT: ${item.nit || "N/A"})`);
-    console.log(`  Fecha:      ${item.fecha} | Total: $${item.total.toLocaleString("es-CO")}`);
-    console.log(`  Validación: ${item.validacion} | Confianza: ${item.confianza} (${item.nivelConfianza.toUpperCase()})`);
-    console.log(`  Estado Banco: ${item.conciliacion === "sin_match" ? "❌ SIN PAGO REGISTRADO" : item.conciliacion}`);
+    console.log("-----------------------------------------------------------------------------");
+    console.log(`[${i + 1}/${flagged.length}] INVOICE: ${item.numeroFactura || "(No Number)"}`);
+    console.log(`  Supplier:    ${item.proveedor} (Tax ID: ${item.nit || "N/A"})`);
+    console.log(`  Date:        ${item.fecha} | Total: $${item.total.toLocaleString("en-US")}`);
+    console.log(`  Validation:  ${item.validacion} | Confidence: ${item.confianza} (${item.nivelConfianza.toUpperCase()})`);
+    console.log(`  Bank Match:  ${item.conciliacion === "sin_match" ? "UNMATCHED (NO RECORD)" : item.conciliacion}`);
     if (item.errores) {
-      console.log(`  ⚠️  Errores detectados: ${item.errores}`);
+      console.log(`  Discrepancy: ${item.errores}`);
     }
 
     const answer = (await askQuestion(
       rl,
-      `\n  ¿Decisión del auditor? ([A]probar / [R]echazar / [O]bservar / [S]altar): `
+      `\n  Auditor Action: ([A]pprove / [R]eject / [F]lag / [S]kip): `
     )).trim().toUpperCase();
 
-    let decision: "APROBADA" | "RECHAZADA" | "OBSERVADA" | null = null;
-    let obs = "";
+    let decision: "APPROVED" | "REJECTED" | "FLAGGED" | null = null;
+    let notes = "";
 
     if (answer === "A") {
-      decision = "APROBADA";
-      obs = "Aprobada manualmente por el auditor";
+      decision = "APPROVED";
+      notes = "Manually approved by auditor";
     } else if (answer === "R") {
-      decision = "RECHAZADA";
-      obs = "Rechazada por inconsistencia insubsanable";
-    } else if (answer === "O") {
-      decision = "OBSERVADA";
-      obs = await askQuestion(rl, "  Nota de observación: ");
+      decision = "REJECTED";
+      notes = "Rejected due to unresolvable discrepancy";
+    } else if (answer === "F") {
+      decision = "FLAGGED";
+      notes = await askQuestion(rl, "  Audit Note / Reason: ");
     }
 
     if (decision) {
@@ -137,11 +136,11 @@ async function main() {
         total: item.total,
         decision,
         timestamp: new Date().toISOString(),
-        observaciones: obs,
+        notes,
       });
-      console.log(`  ✅ Registrado como: ${decision}\n`);
+      console.log(`  Recorded as: ${decision}\n`);
     } else {
-      console.log(`  ⏩ Omitida sin resolución.\n`);
+      console.log(`  Skipped without resolution.\n`);
     }
   }
 
@@ -152,12 +151,12 @@ async function main() {
     await mkdir(outDir, { recursive: true });
     const auditFilePath = path.join(outDir, "auditoria_resoluciones.json");
     await writeFile(auditFilePath, JSON.stringify(resolutions, null, 2));
-    console.log(`\n🎉 Auditoría finalizada. ${resolutions.length} resoluciones guardadas en:`);
+    console.log(`\nAudit completed. ${resolutions.length} resolutions saved to:`);
     console.log(`   ${auditFilePath}\n`);
   }
 }
 
 main().catch((err) => {
-  console.error("Error en auditoría:", err);
+  console.error("Audit tool error:", err);
   process.exit(1);
 });

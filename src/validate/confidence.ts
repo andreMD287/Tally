@@ -1,9 +1,9 @@
 import type { Invoice, MatchResult, ValidationResult } from "../types.js";
-import { isValidNit } from "../nit.js";
+import { getActiveJurisdiction } from "./jurisdictions/index.js";
 
 export interface ConfidenceBreakdown {
-  score: number; // 0.0 a 1.0
-  percentage: number; // 0 a 100
+  score: number; // 0.0 to 1.0
+  percentage: number; // 0 to 100
   level: "alta" | "media" | "baja";
   factors: {
     arithmetic: { ok: boolean; weight: number; points: number };
@@ -14,8 +14,8 @@ export interface ConfidenceBreakdown {
 }
 
 /**
- * Cuantifica la confianza y honestidad del resultado de conciliación.
- * Un agente que señala incertidumbre es superior a uno que alucina con confianza.
+ * Quantifies confidence and transparency for reconciliation outcomes.
+ * An agent that communicates uncertainty outperforms one that hallucinates numbers.
  */
 export function calculateConfidence(
   invoice: Invoice,
@@ -26,7 +26,9 @@ export function calculateConfidence(
   const arithmeticOk = diff <= 2;
   const arithmeticPoints = arithmeticOk ? 0.35 : 0;
 
-  const nitOk = invoice.nit ? isValidNit(invoice.nit) : false;
+  const jurisdiction = getActiveJurisdiction();
+  const taxIdResult = invoice.nit ? jurisdiction.validateTaxId(invoice.nit) : null;
+  const nitOk = taxIdResult ? taxIdResult.isValid : false;
   const nitPoints = nitOk ? 0.25 : invoice.nit === null ? 0.1 : 0;
 
   let matchPoints = 0;

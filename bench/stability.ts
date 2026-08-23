@@ -21,15 +21,15 @@ async function runStabilityMatrix() {
   const args = process.argv.slice(2);
   const useQvac = args.includes("--qvac");
   const runsCount = 5;
-  const sampleLimit = 10; // 10 facturas evaluadas en 5 corridas
+  const sampleLimit = 10;
 
   const extractor: ExtractFn = useQvac ? qvacExtract : mockExtract;
 
   console.log(`\n======================================================`);
-  console.log(`  TALLY: Matriz de Confiabilidad y Estabilidad Multi-Run`);
+  console.log(`  TALLY: Multi-Run Stability and Reliability Matrix`);
   console.log(`  (Track 2: Small models, hard tasks & reliability)`);
-  console.log(`  Motor: ${useQvac ? "QVAC (SmolVLM2-500M)" : "Mock / Deterministic Baseline"}`);
-  console.log(`  Corridas (N): ${runsCount} | Muestras por corrida: ${sampleLimit}`);
+  console.log(`  Engine: ${useQvac ? "QVAC (SmolVLM2-500M)" : "Mock / Deterministic Baseline"}`);
+  console.log(`  Runs (N): ${runsCount} | Samples per run: ${sampleLimit}`);
   console.log(`======================================================\n`);
 
   const gtPath = path.resolve("data", "ground_truth.json");
@@ -38,10 +38,10 @@ async function runStabilityMatrix() {
   const facturasDir = path.resolve("data", "facturas");
 
   const runResults: RunResult[] = [];
-  const fieldVariance = new Map<string, number[]>(); // file -> array of extracted totals across runs
+  const fieldVariance = new Map<string, number[]>();
 
   for (let r = 1; r <= runsCount; r++) {
-    process.stdout.write(`⚡ Ejecutando Corrida [${r}/${runsCount}]... `);
+    process.stdout.write(`Executing Run [${r}/${runsCount}]... `);
     const startRun = Date.now();
     let parsedCount = 0;
     let perfectMatchCount = 0;
@@ -72,10 +72,9 @@ async function runStabilityMatrix() {
       allMatchCount: perfectMatchCount,
       avgLatencyMs: avgLat,
     });
-    console.log(`Completada en ${Date.now() - startRun}ms (Aciertos: ${perfectMatchCount}/${sampleLimit})`);
+    console.log(`Completed in ${Date.now() - startRun}ms (Exact: ${perfectMatchCount}/${sampleLimit})`);
   }
 
-  // Análisis de consistencia entre corridas
   let consistentInvoices = 0;
   for (const [file, totals] of fieldVariance.entries()) {
     const allSame = totals.every((val) => val === totals[0]);
@@ -87,39 +86,39 @@ async function runStabilityMatrix() {
   const consistencyRate = ((consistentInvoices / sampleLimit) * 100).toFixed(1);
 
   console.log(`\n======================================================`);
-  console.log(`  RESULTADOS DE ESTABILIDAD MULTI-RUN (N=${runsCount})`);
+  console.log(`  MULTI-RUN STABILITY RESULTS (N=${runsCount})`);
   console.log(`======================================================`);
-  console.log(`- Determinismo / Consistencia entre corridas: ${consistencyRate}% (${consistentInvoices}/${sampleLimit})`);
-  console.log(`- Tasa media de éxito en parseo JSON:         100.0%`);
-  console.log(`- Desviación estándar de latencia:            Baja (<15ms)`);
+  console.log(`- Determinism / Multi-Run Consistency: ${consistencyRate}% (${consistentInvoices}/${sampleLimit})`);
+  console.log(`- Average JSON Parse Success Rate:     100.0%`);
+  console.log(`- Latency Standard Deviation:          Low (<15ms)`);
 
-  const reportMd = `# Matriz de Confiabilidad y Estabilidad Multi-Run (Track 2)
+  const reportMd = `# Multi-Run Reliability and Stability Matrix (Track 2)
 
-**Fecha**: ${new Date().toISOString().split("T")[0]}
-**Motor**: ${useQvac ? "QVAC (SmolVLM2-500M)" : "Mock Determinístico Baseline"}
-**Número de corridas**: ${runsCount}
-**Muestras evaluadas**: ${sampleLimit} facturas (mix balanceado limpias y degradadas)
+**Date**: ${new Date().toISOString().split("T")[0]}
+**Engine**: ${useQvac ? "QVAC (SmolVLM2-500M)" : "Mock Deterministic Baseline"}
+**Runs (N)**: ${runsCount}
+**Evaluated Samples**: ${sampleLimit} invoices (balanced mix of clean and degraded scans)
 
-## Resultados por Corrida
+## Results by Run
 
-| Corrida | Facturas Parseadas | Aciertos Exactos | Latencia Media (ms) |
-|---|---|---|---|
-${runResults.map((r) => `| Corrida ${r.runIndex} | ${r.totalParsed}/${sampleLimit} | ${r.allMatchCount}/${sampleLimit} | ${r.avgLatencyMs} ms |`).join("\n")}
+| Run | Parsed Invoices | Exact Matches | Mean Latency (ms) |
+| :--- | :--- | :--- | :--- |
+${runResults.map((r) => `| Run ${r.runIndex} | ${r.totalParsed}/${sampleLimit} | ${r.allMatchCount}/${sampleLimit} | ${r.avgLatencyMs} ms |`).join("\n")}
 
-## Mapeo de Confiabilidad y Mitigación de Fallas
+## Reliability Analysis & Failure Mapping
 
-- **Determinismo entre corridas**: ${consistencyRate}% de coherencia idéntica en outputs a través de las ${runsCount} repeticiones.
-- **Resiliencia de Esquema**: 100% de cumplimiento de \`InvoiceSchema\` mediante sanitización y fallback estructurado.
-- **Mapeo Honesto de Fallas**: Las discrepancias restantes corresponden a casos deliberados de prueba (dígito de verificación NIT inválido en RUT o imágenes con ruido extremo al 30%).
+- **Multi-Run Determinism**: ${consistencyRate}% identical output coherence across ${runsCount} iterations.
+- **Schema Resilience**: 100% adherence to \`InvoiceSchema\` using sanitization and structured fallback.
+- **Honest Failure Mapping**: Residual discrepancies correspond to deliberate test anomalies (invalid tax checksum digits in test fixtures or 30% visual degradation).
 `;
 
   const outDir = path.resolve("out");
   await mkdir(outDir, { recursive: true });
   await writeFile(path.join(outDir, "stability_matrix.md"), reportMd);
-  console.log(`\nReporte guardado en: out/stability_matrix.md\n`);
+  console.log(`\nReport saved to: out/stability_matrix.md\n`);
 }
 
 runStabilityMatrix().catch((err) => {
-  console.error("Error en stability matrix:", err);
+  console.error("Stability matrix error:", err);
   process.exit(1);
 });

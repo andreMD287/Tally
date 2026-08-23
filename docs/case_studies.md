@@ -1,82 +1,82 @@
-# 💼 Casos de Estudio Reales: Conciliación Automatizada con Tally
+# Operational Case Studies: Automated Reconciliation with Tally
 
-Este documento presenta **4 casos de estudio operativos reales** resueltos por Tally, demostrando cómo el agente local reemplaza horas de trabajo manual en departamentos contables y de tesorería (Track 1).
-
----
-
-## 📌 Caso 1: Factura con Pago Dividido (Split-Payment Multi-Transacción)
-
-### 🏢 Contexto
-La empresa contratista `Refrigeracion Industrial S.A.S.` emite la factura `A-0003` por un total de **$2.449.020 COP** con fecha `2026-08-19`. Debido a políticas de flujo de caja del banco emisor, la tesorería realizó el pago en **dos transferencias electrónicas consecutivas**:
-1. Movimiento 1: `$1.500.000 COP` (Referencia `TRX924508-A`, fecha `2026-08-19`)
-2. Movimiento 2: `$949.020 COP` (Referencia `TRX924508-B`, fecha `2026-08-20`)
-
-### ❌ Falla del Software Tradicional
-Los sistemas ERP y bots de conciliación por reglas simples buscan coincidencia exacta $1:1$ de montos. Al no existir ningún movimiento por `$2.449.020`, la factura queda clasificada como "Sin Pago / Discrepancia Grave", requiriendo que un analista revise manualmente el extracto bancario.
-
-### ✅ Resolución Automatizada de Tally
-1. **Extracción VLM**: SmolVLM2 extrae subtotal `$2.058.000`, IVA `$391.020` y total `$2.449.020`.
-2. **Validación DIAN**: Verifica que `2.058.000 + 391.020 = 2.449.020` (Aritmética OK) y que el NIT `938617623-0` es válido.
-3. **Algoritmo de Split-Match ([`src/match/index.ts`](../src/match/index.ts))**: Detecta que la suma de dos movimientos bancarios dentro de la ventana de $\pm3$ días cubre exactamente `$2.449.020`.
-4. **Resultado**: Conciliación automática con tipo `dividido` y score `1.0`. Cero intervención humana requerida.
+This document details **four real-world operational case studies** resolved by Tally, demonstrating how an on-device local agent replaces manual review in accounting and treasury departments (Track 1).
 
 ---
 
-## 📌 Caso 2: Intento de Doble Cobro / Factura Duplicada (Fraud & Duplication Detection)
+## Case 1: Multi-Transaction Split Payment Reconciliation
 
-### 🏢 Contexto
-El proveedor `Empaques Medellin S.A.S.` envió la factura `FAC-0001` (`$1.632.680 COP`) por correo electrónico el 11 de agosto. Una semana después, el departamento de cobranzas del proveedor reenvía la misma factura con un mensaje de "Recordatorio de Pago".
+### Scenario
+An industrial supplier (`Refrigeracion Industrial S.A.S.`) issues invoice `A-0003` for **$2,449,020 COP** on `2026-08-19`. Due to corporate treasury cash flow rules, payment is executed in **two separate wire transfers**:
+1. Transaction 1: `$1,500,000 COP` (Reference `TRX924508-A`, Date `2026-08-19`)
+2. Transaction 2: `$949,020 COP` (Reference `TRX924508-B`, Date `2026-08-20`)
 
-### ❌ Falla del Software Tradicional
-Si el sistema procesa el buzón de correo sin deduplicación previa, se genera una segunda cuenta por pagar en el sistema, lo que puede provocar un **pago duplicado inadvertido** por tesorería.
+### Failure Mode in Traditional Software
+Standard ERP matching tools only perform 1:1 exact sum matching. Because no single bank ledger line matches `$2,449,020`, the invoice is marked as "Unpaid / Unreconciled Exception", requiring a human accountant to manually search bank statements.
 
-### ✅ Resolución Automatizada de Tally
-1. **Detección en Ingesta ([`src/ingest/dedupe.ts`](../src/ingest/dedupe.ts))**: El pipeline agrupa por `proveedor + numeroFactura + total` antes del matching contable.
-2. **Acción de Tally**: Descarta el segundo archivo (`0 duplicados contados dos veces`), registra la alerta en [`out/discrepancias.md`](../out/discrepancias.md) y asegura que el extracto bancario se concilie exactamente una vez.
-3. **Ahorro para la Empresa**: Previene la pérdida de `$1.632.680 COP` en pagos duplicados.
-
----
-
-## 📌 Caso 3: Factura con Error Aritmético del Proveedor y Calidad Degradada
-
-### 🏢 Contexto
-La factura `INV-0010` emitida por `Empaques Medellin y CIA S. en C.` llegó como un escaneo con ruido visual (30% degradada). Además, la factura tiene un **error de cálculo en origen**:
-- Subtotal: `$254.000`
-- IVA (19%): `$48.260` (Suma correcta: `$302.260`)
-- Total impreso en factura: **`$302.281`** (Diferencia: `$21 COP`).
-
-### ✅ Resolución y Auditoría de Tally
-1. **Extracción Resiliente**: SmolVLM2 extrae los valores a pesar del ruido visual.
-2. **Alerta Crítica DIAN**: La regla aritmética detecta el descuadre de `$21 COP` y marca la validación como `ERROR`.
-3. **Puntuación de Confianza**: Asigna un **65% de confianza** (*MEDIA*), señalando incertidumbre honesta.
-4. **Acción en 5 Segundos**: El reporte genera:
-   > ⚡ **Acción en 5s**: *Solicitar refacturación al proveedor o revisar si hubo un descuento comercial no desglosado.*
-5. **Auditoría en 1 Clic**: El analista abre `npm run audit` y marca la factura como `[OBSERVADA]`, enviando la notificación al proveedor de inmediato.
+### Automated Resolution in Tally
+1. **Multimodal Extraction**: SmolVLM2 extracts subtotal `$2,058,000`, VAT `$391,020`, and total `$2,449,020`.
+2. **Tax Check**: Verifies `2,058,000 + 391,020 = 2,449,020` and validates the DIAN NIT `938617623-0`.
+3. **Split-Match Algorithm ([`src/match/index.ts`](../src/match/index.ts))**: Detects that two bank lines within the $\pm3$ day window sum to `$2,449,020`.
+4. **Outcome**: Automatically reconciled with classification `split` and confidence score `1.0` without human intervention.
 
 ---
 
-## 📌 Caso 4: Inconsistencia en Dígito de Verificación de NIT (Prevención de Sanciones)
+## Case 2: Duplicate Invoice Fraud and Double-Billing Prevention
 
-### 🏢 Contexto
-La factura `INV-0005` de `Distribuciones Cafetera y CIA S. en C.` presenta el NIT impreso como `964390161-0`.
+### Scenario
+Vendor `Empaques Medellin S.A.S.` emails invoice `FAC-0001` (`$1,632,680 COP`) on August 11. One week later, the vendor collections desk re-sends the exact same document as a "Payment Reminder".
 
-### ❌ Falla del Software Tradicional
-La mayoría de los OCRs leen el texto sin validar la legalidad tributaria del documento ante el organismo regulador (DIAN). Al presentar la información exógena, la empresa es sancionada por reportar NITs inexistentes.
+### Failure Mode in Traditional Software
+Without strict pre-reconciliation deduplication, systems create a second accounts payable entry, creating a serious risk of accidental double payment.
 
-### ✅ Resolución Automatizada de Tally
-1. **Cálculo Matemático DIAN ([`src/nit.ts`](../src/nit.ts))**: Tally aplica el algoritmo oficial de módulo 11 ponderado:
-   $$\text{Dígito Real} = f(\text{"964390161"}) = 8 \neq 0$$
-2. **Detección Inmediata**: Clasificada como `🟡 ADVERTENCIA: Inconsistencia en NIT`.
-3. **Acción en 5s**: *Verificar RUT del proveedor en el portal DIAN para confirmar dígito de verificación antes de registrar la deducción fiscal.*
+### Automated Resolution in Tally
+1. **Ingestion Deduplication ([`src/ingest/dedupe.ts`](../src/ingest/dedupe.ts))**: The pipeline indexes incoming items by `vendor + invoiceNumber + total` before ledger matching.
+2. **Tally Action**: Discards the duplicate file, logs the event in [`out/discrepancias.md`](../out/discrepancias.md), and guarantees the bank statement is reconciled only once.
+3. **Financial Protection**: Prevents a `$1,632,680 COP` loss from duplicate disbursement.
 
 ---
 
-## 📊 Tabla Comparativa de Rendimiento
+## Case 3: Vendor Arithmetic Calculation Error in Degraded Scan
 
-| Métrica | Proceso Manual Tradicional | Software OCR en la Nube | Tally (Agente Local QVAC) |
-|---|---|---|---|
-| **Tiempo por Factura** | ~3 a 5 minutos | ~15 a 30 segundos | **< 1 segundo** |
-| **Costo por Inferencia** | Alto (horas-persona) | $0.02 - $0.05 USD / doc | **$0.00 USD (100% Local)** |
-| **Privacidad de Datos** | Riesgo de fuga humana | Datos enviados a servidores externos | **Soberanía 100% On-Device** |
-| **Detección de Pagos Divididos** | Lenta y propensa a error | Rara vez soportada | **Automática (Split-Match 2 tx)** |
-| **Auditoría de Incertidumbre** | Subjetiva | Caja negra | **Score de Confianza (0-100%)** |
+### Scenario
+Invoice `INV-0010` from `Empaques Medellin y CIA S. en C.` arrives as a low-quality scanned image (30% noise and shadow). The invoice also contains a **vendor calculation error**:
+- Subtotal: `$254,000`
+- VAT (19%): `$48,260` (Correct arithmetic sum: `$302,260`)
+- Printed Total on Invoice: **`$302,281`** (Discrepancy: `$21 COP`).
+
+### Automated Resolution and Triage in Tally
+1. **Resilient Vision**: SmolVLM2 extracts numerical fields despite visual degradation.
+2. **Arithmetic Guardrail**: Deterministic rules detect the `$21 COP` variance and flag validation status as `ERROR`.
+3. **Honest Confidence Scoring**: Assigns **65% confidence** (*MEDIUM*), communicating uncertainty.
+4. **5-Second Actionable Card**: The report outputs:
+   > **5-Second Action**: *Request revised invoice from vendor or check for unitemized discount.*
+5. **1-Click Audit**: The accountant opens `npm run audit`, reviews the delta, and flags the item with keypress `[O]` to notify procurement.
+
+---
+
+## Case 4: Tax ID Checksum Digit Inconsistency (Penalty Prevention)
+
+### Scenario
+Invoice `INV-0005` from `Distribuciones Cafetera y CIA S. en C.` displays printed NIT `964390161-0`.
+
+### Failure Mode in Traditional Software
+Standard OCR tools read text without verifying regulatory checksum validity. When tax filings are submitted, tax authorities (DIAN, SAT, AFIP) reject the return and issue compliance penalties.
+
+### Automated Resolution in Tally
+1. **Mathematical Checksum Validation ([`src/nit.ts`](../src/nit.ts))**: Tally computes the weighted Modulo 11 algorithm:
+   $$\text{Expected Checksum} = f(\text{"964390161"}) = 8 \neq 0$$
+2. **Instant Flag**: Categorized as `WARNING: Tax ID Checksum Inconsistency`.
+3. **5-Second Action**: *Verify vendor tax ID record on official tax portal before recording tax credit deduction.*
+
+---
+
+## Performance Comparison Matrix
+
+| Performance Metric | Traditional Manual Process | Cloud OCR API | Tally (Local QVAC Agent) |
+| :--- | :--- | :--- | :--- |
+| **Time per Invoice** | ~3 to 5 minutes | ~15 to 30 seconds | **< 1 second** |
+| **Cost per Inference** | High (human labor hours) | $0.02 to $0.05 per doc | **$0.00 (100% Local)** |
+| **Data Privacy** | Risk of human data leak | Documents sent to cloud servers | **100% On-Device Sovereignty** |
+| **Split-Payment Matching** | Error-prone manual search | Rarely supported | **Automated (2-transaction pairs)** |
+| **Uncertainty Calibration** | Subjective | Black-box output | **Calibrated Score (0-100%)** |

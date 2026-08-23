@@ -76,7 +76,7 @@ async function runBenchmark() {
 
   const extractor: ExtractFn = useQvac ? qvacExtract : mockExtract;
   console.log(`\n======================================================`);
-  console.log(`  TALLY BENCHMARK: Evaluación de Extracción VLM / OCR`);
+  console.log(`  TALLY BENCHMARK: VLM / OCR Extraction Evaluation`);
   console.log(`  Extractor: ${useQvac ? "QVAC (SmolVLM2-500M)" : "Mock (Ground-Truth Baseline)"}`);
   console.log(`======================================================\n`);
 
@@ -86,7 +86,7 @@ async function runBenchmark() {
 
   if (limit && limit > 0) {
     groundTruth = groundTruth.slice(0, limit);
-    console.log(`[INFO] Evaluando subset limitado a ${limit} facturas.\n`);
+    console.log(`[INFO] Evaluating limited subset of ${limit} invoices.\n`);
   }
 
   const stats = initStats();
@@ -98,7 +98,7 @@ async function runBenchmark() {
     const item = groundTruth[i];
     const imagePath = path.join(facturasDir, item.file);
 
-    process.stdout.write(`[${i + 1}/${groundTruth.length}] Evaluando ${item.file}... `);
+    process.stdout.write(`[${i + 1}/${groundTruth.length}] Evaluating ${item.file}... `);
 
     const result: ExtractResult = await extractor(imagePath);
     stats.latencies.push(result.latencyMs);
@@ -111,7 +111,7 @@ async function runBenchmark() {
 
     if (!result.invoice) {
       stats.failedCount++;
-      console.log(`❌ ERROR (${result.error ?? "Fallo en parseo"}) [${result.latencyMs}ms]`);
+      console.log(`[ERROR] (${result.error ?? "Parse failure"}) [${result.latencyMs}ms]`);
       continue;
     }
 
@@ -120,7 +120,6 @@ async function runBenchmark() {
     const inv = result.invoice;
     const gt = item.invoice;
 
-    // Evaluación campo por campo
     const matchProveedor = normalizeStr(inv.proveedor).includes(normalizeStr(gt.proveedor)) ||
       normalizeStr(gt.proveedor).includes(normalizeStr(inv.proveedor));
     const matchNit = normalizeStr(inv.nit) === normalizeStr(gt.nit);
@@ -156,13 +155,12 @@ async function runBenchmark() {
     if (allCorrect) {
       if (item.degraded) stats.degradedCorrectAll++;
       else stats.cleanCorrectAll++;
-      console.log(`✅ OK (100% exacto) [${result.latencyMs}ms]`);
+      console.log(`[OK] (100% exact) [${result.latencyMs}ms]`);
     } else {
-      console.log(`⚠️ PARCIAL [${result.latencyMs}ms]`);
+      console.log(`[PARTIAL] [${result.latencyMs}ms]`);
     }
   }
 
-  // Cálculos finales
   const avgLatency = Math.round(stats.latencies.reduce((a, b) => a + b, 0) / (stats.latencies.length || 1));
   const sortedLatencies = [...stats.latencies].sort((a, b) => a - b);
   const p95Latency = sortedLatencies[Math.floor(sortedLatencies.length * 0.95)] ?? 0;
@@ -172,64 +170,63 @@ async function runBenchmark() {
   const pct = (correct: number, total: number) => total > 0 ? ((correct / total) * 100).toFixed(1) : "0.0";
 
   console.log(`\n======================================================`);
-  console.log(`  RESUMEN DEL BENCHMARK`);
+  console.log(`  BENCHMARK SUMMARY`);
   console.log(`======================================================`);
-  console.log(`Total facturas evaluadas: ${stats.totalInvoices}`);
-  console.log(`Parseo exitoso a JSON:    ${stats.extractedCount}/${stats.totalInvoices} (${pct(stats.extractedCount, stats.totalInvoices)}%)`);
-  console.log(`Latencia media:           ${avgLatency} ms (Min: ${minLatency}ms, Max: ${maxLatency}ms, P95: ${p95Latency}ms)`);
-  console.log(`\n--- Exactitud por Campo ---`);
-  console.log(`- Proveedor:      ${pct(stats.fields.proveedor.correct, stats.fields.proveedor.total)}% (${stats.fields.proveedor.correct}/${stats.fields.proveedor.total})`);
-  console.log(`- NIT:            ${pct(stats.fields.nit.correct, stats.fields.nit.total)}% (${stats.fields.nit.correct}/${stats.fields.nit.total})`);
-  console.log(`- Nº Factura:     ${pct(stats.fields.numeroFactura.correct, stats.fields.numeroFactura.total)}% (${stats.fields.numeroFactura.correct}/${stats.fields.numeroFactura.total})`);
-  console.log(`- Fecha:          ${pct(stats.fields.fecha.correct, stats.fields.fecha.total)}% (${stats.fields.fecha.correct}/${stats.fields.fecha.total})`);
+  console.log(`Total Invoices Evaluated: ${stats.totalInvoices}`);
+  console.log(`Successful JSON Parsing:  ${stats.extractedCount}/${stats.totalInvoices} (${pct(stats.extractedCount, stats.totalInvoices)}%)`);
+  console.log(`Mean Latency:             ${avgLatency} ms (Min: ${minLatency}ms, Max: ${maxLatency}ms, P95: ${p95Latency}ms)`);
+  console.log(`\n--- Accuracy by Field ---`);
+  console.log(`- Supplier:       ${pct(stats.fields.proveedor.correct, stats.fields.proveedor.total)}% (${stats.fields.proveedor.correct}/${stats.fields.proveedor.total})`);
+  console.log(`- Tax ID:         ${pct(stats.fields.nit.correct, stats.fields.nit.total)}% (${stats.fields.nit.correct}/${stats.fields.nit.total})`);
+  console.log(`- Invoice Number: ${pct(stats.fields.numeroFactura.correct, stats.fields.numeroFactura.total)}% (${stats.fields.numeroFactura.correct}/${stats.fields.numeroFactura.total})`);
+  console.log(`- Date:           ${pct(stats.fields.fecha.correct, stats.fields.fecha.total)}% (${stats.fields.fecha.correct}/${stats.fields.fecha.total})`);
   console.log(`- Subtotal:       ${pct(stats.fields.subtotal.correct, stats.fields.subtotal.total)}% (${stats.fields.subtotal.correct}/${stats.fields.subtotal.total})`);
-  console.log(`- IVA:            ${pct(stats.fields.iva.correct, stats.fields.iva.total)}% (${stats.fields.iva.correct}/${stats.fields.iva.total})`);
+  console.log(`- VAT:            ${pct(stats.fields.iva.correct, stats.fields.iva.total)}% (${stats.fields.iva.correct}/${stats.fields.iva.total})`);
   console.log(`- Total:          ${pct(stats.fields.total.correct, stats.fields.total.total)}% (${stats.fields.total.correct}/${stats.fields.total.total})`);
-  console.log(`\n--- Desglose de Robustez ---`);
-  console.log(`- Facturas limpias:     ${pct(stats.cleanCorrectAll, stats.cleanTotal)}% perfectas (${stats.cleanCorrectAll}/${stats.cleanTotal})`);
-  console.log(`- Facturas degradadas:  ${pct(stats.degradedCorrectAll, stats.degradedTotal)}% perfectas (${stats.degradedCorrectAll}/${stats.degradedTotal})`);
+  console.log(`\n--- Robustness Breakdown ---`);
+  console.log(`- Clean Invoices:     ${pct(stats.cleanCorrectAll, stats.cleanTotal)}% perfect (${stats.cleanCorrectAll}/${stats.cleanTotal})`);
+  console.log(`- Degraded Invoices:  ${pct(stats.degradedCorrectAll, stats.degradedTotal)}% perfect (${stats.degradedCorrectAll}/${stats.degradedTotal})`);
 
-  // Guardar archivo Markdown con resultados
-  const reportMd = `# Resultados del Benchmark - Tally
+  const reportMd = `# Benchmark Results: Tally
 
-**Fecha**: ${new Date().toISOString().split("T")[0]}
-**Motor de Extracción**: ${useQvac ? "QVAC (SmolVLM2-500M Multimodal Q8_0)" : "Mock (Baseline)"}
+**Date**: ${new Date().toISOString().split("T")[0]}
+**Extraction Engine**: ${useQvac ? "QVAC (SmolVLM2-500M Multimodal Q8_0)" : "Mock (Baseline)"}
 
-## Métricas Globales
+## Global Metrics
 
-| Métrica | Valor |
-|---|---|
-| Total Facturas | ${stats.totalInvoices} |
-| Tasa de Éxito de Parseo | ${pct(stats.extractedCount, stats.totalInvoices)}% (${stats.extractedCount}/${stats.totalInvoices}) |
-| Latencia Media | ${avgLatency} ms |
-| Latencia P95 | ${p95Latency} ms |
-| Rango de Latencia | ${minLatency} ms - ${maxLatency} ms |
+| Metric | Value |
+| :--- | :--- |
+| Total Invoices | ${stats.totalInvoices} |
+| JSON Parsing Rate | ${pct(stats.extractedCount, stats.totalInvoices)}% (${stats.extractedCount}/${stats.totalInvoices}) |
+| Mean Latency | ${avgLatency} ms |
+| P95 Latency | ${p95Latency} ms |
+| Latency Range | ${minLatency} ms - ${maxLatency} ms |
 
-## Precisión por Campo
+## Field Precision
 
-| Campo | Aciertos | Exactitud |
-|---|---|---|
-| Proveedor | ${stats.fields.proveedor.correct}/${stats.fields.proveedor.total} | ${pct(stats.fields.proveedor.correct, stats.fields.proveedor.total)}% |
-| NIT | ${stats.fields.nit.correct}/${stats.fields.nit.total} | ${pct(stats.fields.nit.correct, stats.fields.nit.total)}% |
-| Número de Factura | ${stats.fields.numeroFactura.correct}/${stats.fields.numeroFactura.total} | ${pct(stats.fields.numeroFactura.correct, stats.fields.numeroFactura.total)}% |
-| Fecha | ${stats.fields.fecha.correct}/${stats.fields.fecha.total} | ${pct(stats.fields.fecha.correct, stats.fields.fecha.total)}% |
-| Subtotal (±$2) | ${stats.fields.subtotal.correct}/${stats.fields.subtotal.total} | ${pct(stats.fields.subtotal.correct, stats.fields.subtotal.total)}% |
-| IVA (±$2) | ${stats.fields.iva.correct}/${stats.fields.iva.total} | ${pct(stats.fields.iva.correct, stats.fields.iva.total)}% |
-| Total (±$2) | ${stats.fields.total.correct}/${stats.fields.total.total} | ${pct(stats.fields.total.correct, stats.fields.total.total)}% |
+| Field | Matches | Accuracy |
+| :--- | :--- | :--- |
+| Supplier | ${stats.fields.proveedor.correct}/${stats.fields.proveedor.total} | ${pct(stats.fields.proveedor.correct, stats.fields.proveedor.total)}% |
+| Tax ID | ${stats.fields.nit.correct}/${stats.fields.nit.total} | ${pct(stats.fields.nit.correct, stats.fields.nit.total)}% |
+| Invoice Number | ${stats.fields.numeroFactura.correct}/${stats.fields.numeroFactura.total} | ${pct(stats.fields.numeroFactura.correct, stats.fields.numeroFactura.total)}% |
+| Date | ${stats.fields.fecha.correct}/${stats.fields.fecha.total} | ${pct(stats.fields.fecha.correct, stats.fields.fecha.total)}% |
+| Subtotal (+-2) | ${stats.fields.subtotal.correct}/${stats.fields.subtotal.total} | ${pct(stats.fields.subtotal.correct, stats.fields.subtotal.total)}% |
+| VAT (+-2) | ${stats.fields.iva.correct}/${stats.fields.iva.total} | ${pct(stats.fields.iva.correct, stats.fields.iva.total)}% |
+| Total (+-2) | ${stats.fields.total.correct}/${stats.fields.total.total} | ${pct(stats.fields.total.correct, stats.fields.total.total)}% |
 
-## Rendimiento según Calidad de Imagen
+## Performance by Image Quality
 
-- **Facturas Limpias (70% del dataset)**: ${pct(stats.cleanCorrectAll, stats.cleanTotal)}% de precisión integral (${stats.cleanCorrectAll}/${stats.cleanTotal})
-- **Facturas Degradadas (30% con ruido/rotación/borrosidad)**: ${pct(stats.degradedCorrectAll, stats.degradedTotal)}% de precisión integral (${stats.degradedCorrectAll}/${stats.degradedTotal})
+- **Clean Invoices (70% of dataset)**: ${pct(stats.cleanCorrectAll, stats.cleanTotal)}% precision (${stats.cleanCorrectAll}/${stats.cleanTotal})
+- **Degraded Invoices (30% with noise/shadow/rotation)**: ${pct(stats.degradedCorrectAll, stats.degradedTotal)}% precision (${stats.degradedCorrectAll}/${stats.degradedTotal})
 `;
 
   const outDir = path.resolve("out");
   await mkdir(outDir, { recursive: true });
   await writeFile(path.join(outDir, "benchmark_results.md"), reportMd);
-  console.log(`\nReporte completo guardado en: out/benchmark_results.md\n`);
+  console.log(`\nReport saved to: out/benchmark_results.md\n`);
 }
 
 runBenchmark().catch((err) => {
-  console.error("Error en benchmark:", err);
+  console.error("Benchmark error:", err);
   process.exit(1);
 });

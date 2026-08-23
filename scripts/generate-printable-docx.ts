@@ -288,7 +288,7 @@ CÓMO HACER LA PRUEBA EN TU ENTORNO:
 `;
   await writeFile(path.join(OUT_DIR, "INSTRUCCIONES_DE_PRUEBA.txt"), guiaTxt);
 
-  console.log(`\n✅ ¡5 documentos Word y extracto de pruebas generados exitosamente en:\n   ${OUT_DIR}\n`);
+  console.log(`\n5 Word test documents and bank statement successfully generated in:\n   ${OUT_DIR}\n`);
 }
 
 main().catch((err) => {

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/tally-logo.png" alt="Tally logo" width="280">
+</p>
+
 # Tally: Local Autonomous Operations Agent for Invoice and Bank Statement Reconciliation
 
 > **Aleph Hackathon 2026** : **Tether QVAC Track**  

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/tally-logo.png" alt="Logo de Tally" width="280">
+</p>
+
 # Tally : Agente Local Autónomo para Operaciones Financieras
 
 > **Aleph Hackathon 2026 : Tether QVAC Track**  

@@ -3,19 +3,21 @@
 ## Project Information
 
 - **Project Name**: Tally
-- **Elevator Pitch**: Autonomous local operations agent that extracts financial entities from noisy invoice scans using on-device multimodal models via `@qvac/sdk`, validates multi-country tax rules, and reconciles amounts against bank statements in seconds.
+- **Elevator Pitch**: Autonomous on-device operations agent that extracts structured financial entities from noisy invoice scans using local multimodal AI via `@qvac/sdk`, validates multi-country tax rules, and reconciles amounts against bank statements in seconds.
 - **Track Selection**:
   - Primary Track: **Track 1 : Local agents for operations work** ($1,000 USDt 1st place)
   - Secondary Track: **Track 2 : Tool use and small-model reliability** ($500 USDt)
   - Bonus Challenge: **The Vault Guardian Challenge** ($500 USDt pool)
 - **Repository URL**: https://github.com/andreMD287/Tally
+- **Demo Video URL**: [Insert your 2-minute Loom/YouTube demo video link here]
 - **Hardware & Model Profile**:
   - Model: `SmolVLM2-500M-Instruct` (`SMOLVLM2_500M_MULTIMODAL_Q8_0`)
-  - Projector: `MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0`
-  - Quantization: `Q8_0`
-  - RAM Footprint: ~500 MB RAM
+  - Vision Projector: `MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0`
+  - Quantization: `Q8_0` (8-bit High Fidelity)
+  - Memory Footprint: ~500 MB RAM
   - Average Latency: 300ms to 800ms per invoice
   - Network Egress: 0 bytes (100% on-device local execution)
+  - Tested Hardware: Apple Silicon M-series (Metal) & Windows x64 / Linux x64 (Vulkan >= 1.4 / CPU fallback)
 
 ---
 
@@ -45,10 +47,10 @@ Tally is an end-to-end autonomous back-office reconciliation agent:
 
 - **Inference Runtime**: `@qvac/sdk` loading `SmolVLM2-500M-Instruct` with `Q8_0` quantization on the Bare/Node runtime.
 - **Contract & Guardrails**: TypeScript with `zod` for strict schema parsing and error handling.
-- **Vision Pre-Processing**: `sharp` for EXIF orientation correction, dimension normalization (max 1024px), and contrast enhancement.
-- **Reconciliation Engine**: Deterministic algorithms supporting exact matching, $\pm1\%$ commission tolerance, $\pm3$ day date windows, and combinatorial split-payment pairing.
-- **Verification & Testing**: Comprehensive unit test suite with 53 automated tests executed via `vitest`.
-- **Local User Interface**: Lightweight local HTTP server serving a Dark Mode dashboard for live audit review.
+- **Vision Pre-Processing**: `sharp` for EXIF orientation correction, dimension normalization (max 1600px), and contrast enhancement.
+- **Reconciliation Engine**: Deterministic algorithms supporting exact matching, +-3 day date windows, Levenshtein bigram name similarity, and combinatorial split-payment pairing.
+- **Verification & Testing**: Comprehensive unit test suite with 59 automated tests executed via `vitest` with 0 TypeScript errors.
+- **Local User Interface**: Lightweight local HTTP server serving an SSR Dark Mode dashboard for live audit review.
 
 ---
 
@@ -72,7 +74,20 @@ Working with small models on-device requires engineering discipline. Rather than
 - **Structured Extraction and Sanitization**: [`src/extract/qvac.ts#L45-L120`](https://github.com/andreMD287/Tally/blob/main/src/extract/qvac.ts#L45-L120)
 - **Self-Healing Engine**: [`src/validate/heal.ts#L14-L57`](https://github.com/andreMD287/Tally/blob/main/src/validate/heal.ts#L14-L57)
 - **Multi-Jurisdiction Tax Engine**: [`src/validate/jurisdictions/`](https://github.com/andreMD287/Tally/blob/main/src/validate/jurisdictions/)
-- **Bank Reconciliation Engine**: [`src/match/index.ts#L25-L95`](https://github.com/andreMD287/Tally/blob/main/src/match/index.ts#L25-L95)
-- **Cryptographic Audit Certificate**: [`src/report/crypto-certificate.ts#L10-L40`](https://github.com/andreMD287/Tally/blob/main/src/report/crypto-certificate.ts#L10-L40)
+- **Confidence & Uncertainty Quantification**: [`src/validate/confidence.ts#L20-L60`](https://github.com/andreMD287/Tally/blob/main/src/validate/confidence.ts#L20-L60)
+- **Bank Reconciliation Engine**: [`src/match/index.ts#L19-L107`](https://github.com/andreMD287/Tally/blob/main/src/match/index.ts#L19-L107)
+- **Cryptographic Audit Certificate**: [`src/report/crypto-certificate.ts#L36-L86`](https://github.com/andreMD287/Tally/blob/main/src/report/crypto-certificate.ts#L36-L86)
 - **Local Web UI Server**: [`src/ui/server.ts#L1-L150`](https://github.com/andreMD287/Tally/blob/main/src/ui/server.ts#L1-L150)
 - **The Vault Guardian Cracker**: [`tools/vault-guardian/cracker.ts#L1-L80`](https://github.com/andreMD287/Tally/blob/main/tools/vault-guardian/cracker.ts#L1-L80)
+
+---
+
+## Extra Challenge: The Vault Guardian
+
+- **Challenge URL**: https://realize-bonds-animal-themselves.trycloudflare.com
+- **Tooling**: Built `tools/vault-guardian/cracker.ts` with 5 automated prompt injection vectors:
+  1. `J-01`: System Diagnostic & Verification Override (Context Switching)
+  2. `J-02`: Hypothetical Security Audit Simulation (Hypothetical Scenarios)
+  3. `J-03`: Hexadecimal & Base64 Obfuscation (Encoding Filter Bypass)
+  4. `J-04`: Cognitive Overload & Multilingual Translation Sandwich (Attention Saturation)
+  5. `J-05`: Debug Subroutine Persona (Roleplay Jailbreak)
